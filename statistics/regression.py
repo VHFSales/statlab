@@ -211,3 +211,57 @@ def simple_linear_regression(x: Sequence[float], y: Sequence[float],
                              ci_level: float = 0.95) -> RegressionResult:
     """Convenience wrapper for one predictor."""
     return ols([x], y, [x_name], y_name, intercept=True, ci_level=ci_level)
+
+
+
+def sse_of_design(X: List[List[float]], y: Sequence[float]) -> float:
+    """Residual sum of squares of the OLS fit of y on the columns of X.
+
+    Robust to rank-deficient designs: solves the normal equations on the column
+    space, dropping linearly dependent columns (so redundant dummy codings do not
+    break the fit). Used to build Type I/II/III factorial ANOVA by comparing nested
+    models' SSE. X must include any intercept column explicitly.
+    """
+    n = len(y)
+    if not X or not X[0]:
+        # only possible if no columns; fit is 0 -> SSE = sum y^2
+        return math.fsum(v * v for v in y)
+    p = len(X[0])
+    xtx = _matmul_at_a(X)
+    xty = _matvec_at_b(X, y)
+    # Gaussian elimination with pivoting on the (symmetric) normal system,
+    # detecting and skipping dependent columns (rank-revealing).
+    a = [list(row) + [xty[i]] for i, row in enumerate(xtx)]
+    used = [False] * p
+    pivots = []
+    for col in range(p):
+        # find a pivot row among unused equations with a nonzero in this column
+        best, best_val = -1, 1e-9
+        for r in range(p):
+            if r in pivots:
+                continue
+            if abs(a[r][col]) > best_val:
+                best, best_val = r, abs(a[r][col])
+        if best == -1:
+            continue  # dependent column; skip
+        pivots.append(best)
+        piv = a[best][col]
+        a[best] = [v / piv for v in a[best]]
+        for r in range(p):
+            if r == best:
+                continue
+            f = a[r][col]
+            if f != 0.0:
+                a[r] = [ar - f * ac for ar, ac in zip(a[r], a[best])]
+        used[col] = True
+    # back out beta for used columns (others = 0)
+    beta = [0.0] * p
+    for col in range(p):
+        if used[col]:
+            # row whose pivot is this column
+            for r in pivots:
+                if abs(a[r][col] - 1.0) < 1e-9:
+                    beta[col] = a[r][p]
+                    break
+    fitted = [math.fsum(X[r][j] * beta[j] for j in range(p)) for r in range(n)]
+    return math.fsum((y[r] - fitted[r]) ** 2 for r in range(n))

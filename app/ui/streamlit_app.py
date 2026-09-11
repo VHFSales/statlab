@@ -925,14 +925,24 @@ def _parse_two_columns(text: str):
 def _section_two_way():
     st.header("ANOVA de duas vias (fatorial)")
     st.markdown("Cole os dados no formato longo com **três colunas**: "
-                "`Fator A | Fator B | Valor`. Delineamento **balanceado** "
-                "(mesmo nº de repetições por célula) é exigido nesta versão.")
+                "`Fator A | Fator B | Valor`. Aceita delineamentos **balanceados e "
+                "desbalanceados** (todas as combinações de níveis precisam existir).")
     fa = st.text_input("Nome do Fator A", "Fator A")
     fb = st.text_input("Nome do Fator B", "Fator B")
     text = st.text_area("Colar dados (A, B, Valor)", height=200,
                         placeholder="Dose, Material, Valor\n"
                                     "Baixa, X, 10.2\nBaixa, X, 10.5\n"
                                     "Baixa, Y, 12.1\nAlta, X, 9.8\n...")
+    ss_label = st.selectbox("Tipo de soma de quadrados (SS)",
+                            ["Tipo II (recomendado sem interação relevante)",
+                             "Tipo III (cada efeito ajustado por todos)",
+                             "Tipo I (sequencial)"])
+    ss_type = {"Tipo I (sequencial)": 1,
+               "Tipo II (recomendado sem interação relevante)": 2,
+               "Tipo III (cada efeito ajustado por todos)": 3}[ss_label]
+    st.caption("Em delineamentos desbalanceados, os tipos I, II e III atribuem somas "
+               "de quadrados diferentes aos efeitos. Em delineamentos balanceados, "
+               "os três coincidem.")
     alpha = st.number_input("α (fatorial)", 0.0001, 0.5, 0.05, 0.01,
                             key="tw_alpha")
     if st.button("Analisar fatorial") and text.strip():
@@ -940,8 +950,15 @@ def _section_two_way():
         if not cells:
             st.error("Não foi possível interpretar a tabela (esperado A, B, Valor).")
             return
-        from app.core.orchestrator import AnalysisOptions, analyze_two_way
-        res = analyze_two_way(cells, fa, fb, AnalysisOptions(alpha=alpha))
+        # flatten cells -> per-observation vectors
+        av, bv, yv = [], [], []
+        for (a, b), vals in cells.items():
+            for v in vals:
+                av.append(a); bv.append(b); yv.append(v)
+        from app.core.orchestrator import (AnalysisOptions,
+                                           analyze_two_way_typed)
+        res = analyze_two_way_typed(av, bv, yv, ss_type=ss_type, factor_a=fa,
+                                    factor_b=fb, options=AnalysisOptions(alpha=alpha))
         st.session_state["tw_result"] = res
 
     res = st.session_state.get("tw_result")
@@ -951,8 +968,10 @@ def _section_two_way():
         for r in res.refusals:
             st.error(r)
         return
+    for w in res.warnings:
+        st.warning(w)
     import pandas as pd
-    st.subheader("Tabela ANOVA (duas vias)")
+    st.subheader(f"Tabela ANOVA (duas vias) — {res.method}")
     rows = []
     for e in res.effects:
         rows.append({
@@ -966,7 +985,6 @@ def _section_two_way():
     for line in res.interpretation.get("effects", []):
         st.write("•", line)
     st.info(res.interpretation.get("note", ""))
-    st.caption(f"Delineamento balanceado com n = {res.n_per_cell} por célula.")
 
 
 def _parse_two_way(text: str):

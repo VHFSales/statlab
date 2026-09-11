@@ -160,9 +160,19 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Two crossed fixed factors A and B with replicates per cell. Estimates the two main
   effects and their **interaction**. Model
   `y_ijk = μ + α_i + β_j + (αβ)_ij + e_ijk`.
-- **Balanced only** in this version (equal n per cell), where the SS decomposition is
-  orthogonal and Type I = II = III — unambiguous. Unbalanced designs are refused with
-  an explanation rather than silently choosing an SS type (spec §99).
+- **Balanced** designs: the SS decomposition is orthogonal and Type I = II = III —
+  unambiguous (statistics/two_way_anova.py).
+- **Unbalanced** designs: the effects are non-orthogonal, so the SS attributed to
+  each effect depends on the **type** (statistics/factorial.py). StatLab computes all
+  three explicitly by comparing nested OLS models' residual SS and requires the user
+  to state the type — there is no single "correct" type (spec §99):
+  - **Type I** (sequential): order-dependent partition; the effects sum to the model
+    SS.
+  - **Type II**: each main effect adjusted for the other main effect (not the
+    interaction).
+  - **Type III**: each effect adjusted for all others, via sum-to-zero (effect)
+    coding so the contrasts are orthogonal.
+  The error (full-model SSE) is identical across types; only the attribution changes.
 - Report per effect: SS, df, MS, F, p, partial η² = SS_effect/(SS_effect+SS_error).
 - **Interpretation:** if the interaction is significant, main effects must be read
   with caution (the effect of one factor depends on the level of the other).
