@@ -78,7 +78,7 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-169 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+232 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
 the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
 job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
 numerical foundation is validated against closed-form identities and published
@@ -102,8 +102,10 @@ Beyond the v1 core, the platform also includes: two-group t-tests (Student/Welch
 **two-way (factorial) ANOVA** with interaction and partial η² (balanced designs);
 **paired/dependent** comparison (paired t-test and Wilcoxon signed-rank);
 **repeated-measures** (Friedman → Nemenyi → CLD); **correlation** (Pearson &
-Spearman with Fisher-z CIs); summary-data and batch analysis; opt-in multiplicity
-corrections (Holm/BH/Bonferroni); a registered outlier-exclusion flow with
+Spearman with Fisher-z CIs); **linear regression** (OLS, simple & multiple);
+**unbalanced factorial ANOVA** with Type I/II/III sums of squares; summary-data and
+batch analysis; opt-in multiplicity corrections (Bonferroni, Holm, Holm–Šidák,
+Šidák, Hochberg, Benjamini–Hochberg); a registered outlier-exclusion flow with
 original-vs-after comparison; Q–Q and residuals-vs-fitted plots; and full
 persistence with deterministic reproduction configs, project save/reopen, and
 snapshots.
@@ -118,7 +120,6 @@ snapshots.
 
 ## Not in v1 (architecture is prepared)
 
-Unbalanced factorial ANOVA (with SS types); parametric repeated-measures/mixed
-ANOVA, ANCOVA, MANOVA; linear/multiple regression and GLM; exact (non-approximate)
-small-sample non-parametric p-values; multiuser server. Methods are added only when
-they can meet the same correctness bar.
+Parametric repeated-measures/mixed ANOVA, ANCOVA, MANOVA; generalized linear models
+(logistic, Poisson); exact (non-approximate) small-sample non-parametric p-values;
+multiuser server. Methods are added only when they can meet the same correctness bar.
