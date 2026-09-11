@@ -2,9 +2,10 @@ import os
 import tempfile
 import unittest
 
-from app.core.orchestrator import AnalysisOptions, analyze_raw
+from app.core.orchestrator import (AnalysisOptions, analyze_batch, analyze_raw)
 from statistics.decision_engine import DesignSpec
-from reports.excel_export import export_excel, summary_csv_string
+from reports.excel_export import (batch_csv_string, export_excel,
+                                  summary_csv_string)
 from reports.pdf_report import build_html_report, save_html_report
 
 
@@ -46,6 +47,33 @@ class TestExport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = save_html_report(res, os.path.join(d, "r.html"))
             self.assertTrue(os.path.exists(p))
+
+    def test_ttest_appears_in_html_and_excel(self):
+        raw = {"A": [10.2, 10.8, 11.1, 10.6, 10.4],
+               "B": [13.5, 14.0, 13.8, 14.2, 13.9]}
+        res = analyze_raw(raw, DesignSpec(n_factors=1), AnalysisOptions())
+        self.assertIsNotNone(res.ttest)
+        html = build_html_report(res)
+        self.assertIn("Comparação de dois grupos", html)
+        # posthoc rows in Excel bundle should carry the t-test
+        with tempfile.TemporaryDirectory() as d:
+            out = export_excel(res, os.path.join(d, "r.xlsx"))
+            if os.path.isdir(out):
+                with open(os.path.join(out, "Pós-testes.csv"), encoding="utf-8") as f:
+                    content = f.read()
+                self.assertIn("d de Cohen", content)
+
+    def test_batch_csv(self):
+        variables = {
+            "Var1": {"A": [1, 2, 3], "B": [8, 9, 10]},
+            "Var2": {"A": [5, 5, 6], "B": [5, 6, 5]},
+        }
+        out = analyze_batch(variables, DesignSpec(n_factors=1), AnalysisOptions(),
+                            fdr_method="holm")
+        csv_txt = batch_csv_string(out)
+        self.assertIn("Variável", csv_txt.splitlines()[0])
+        self.assertIn("p ajustado", csv_txt.splitlines()[0])
+        self.assertIn("Var1", csv_txt)
 
 
 if __name__ == "__main__":

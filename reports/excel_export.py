@@ -64,6 +64,15 @@ def _anova_rows(result) -> List[list]:
 def _posthoc_rows(result) -> List[list]:
     ph = result.posthoc
     if not ph:
+        t = getattr(result, "ttest", None)
+        if t:
+            return [
+                ["Método", "Grupo 1", "Grupo 2", "Diferença", "t", "df", "p",
+                 "IC inf", "IC sup", "d de Cohen", "Significativo"],
+                [t["method"], t["group1"], t["group2"], t["diff"], t["statistic"],
+                 t["df"], t["p"], t["ci_low"], t["ci_high"], t["cohens_d"],
+                 "Sim" if t["significant"] else "Não"],
+            ]
         return [["(sem pós-teste)"]]
     rows = [["Grupo 1", "Grupo 2", "Média 1", "Média 2", "Diferença",
              "IC inf", "IC sup", "p ajustado", "Significativo"]]
@@ -149,4 +158,28 @@ def export_excel(result, path: str, project_meta: Dict = None) -> str:
 def summary_csv_string(result) -> str:
     buf = io.StringIO()
     csv.writer(buf).writerows(_summary_rows(result))
+    return buf.getvalue()
+
+
+
+def batch_csv_string(batch_out) -> str:
+    """Consolidated CSV for a batch analysis (one row per variable)."""
+    cons = batch_out["consolidated"]
+    fdr_adj = {}
+    if cons.get("fdr"):
+        fdr_adj = dict(zip(cons["fdr"]["labels"], cons["fdr"]["p_adjusted"]))
+    header = ["Variável", "Método", "p (global)", "p ajustado", "CLD", "Situação"]
+    rows = [header]
+    for name, res in batch_out["results"].items():
+        if res.refusals:
+            rows.append([name, "—", "", "", "", "recusada: " + res.refusals[0]])
+            continue
+        p = (res.omnibus or {}).get("p") if res.omnibus else (
+            res.ttest["p"] if res.ttest else "")
+        method = res.omnibus_kind or ("t-test" if res.ttest else "—")
+        cld = " ".join(f"{k}:{v}" for k, v in
+                       (res.cld or {}).get("display", {}).items())
+        rows.append([name, method, p, fdr_adj.get(name, ""), cld, "ok"])
+    buf = io.StringIO()
+    csv.writer(buf).writerows(rows)
     return buf.getvalue()

@@ -25,7 +25,8 @@ except Exception as exc:  # pragma: no cover
         "execute `streamlit run app/ui/streamlit_app.py`.\n" + str(exc)
     )
 
-from app.core.orchestrator import AnalysisOptions, analyze_raw
+from app.core.orchestrator import (AnalysisOptions, analyze_batch, analyze_raw,
+                                   analyze_summary)
 from data.importer import import_text
 from statistics.decision_engine import DesignSpec
 from statistics.formatting import format_number, format_p
@@ -52,7 +53,11 @@ HELP = {
 
 def _init_state():
     st.session_state.setdefault("raw", None)
+    st.session_state.setdefault("summary", None)   # {label: {mean, sd, n}}
+    st.session_state.setdefault("data_kind", "RAW")  # "RAW" | "SUMMARY"
     st.session_state.setdefault("result", None)
+    st.session_state.setdefault("batch", None)       # {var: raw_dict}
+    st.session_state.setdefault("batch_out", None)
     st.session_state.setdefault("project", {"Nome": "", "Pesquisador": "",
                                             "Laboratório": "", "Descrição": ""})
 
@@ -67,7 +72,7 @@ def main():
     mode = st.sidebar.radio("Modo", ["Rápido", "Avançado"])
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
-        "ANÁLISE", "PÓS-TESTES", "GRÁFICOS", "RELATÓRIO", "EXPORTAR"])
+        "ANÁLISE", "PÓS-TESTES", "GRÁFICOS", "LOTE", "RELATÓRIO", "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -89,6 +94,8 @@ def main():
         _section_posthoc()
     elif section == "GRÁFICOS":
         _section_plots()
+    elif section == "LOTE":
+        _section_batch(mode)
     elif section == "RELATÓRIO":
         _section_report()
     elif section == "EXPORTAR":
@@ -106,22 +113,76 @@ def _section_project():
             "estatística, a menos que você os transforme explicitamente em fatores.")
 
 
+def _parse_summary(text: str):
+    """Parse 'Grupo | Média | DP | n' rows (comma or tab separated)."""
+    out = {}
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in (line.split("\t") if "\t" in line
+                                     else line.split(","))]
+        if len(parts) < 3:
+            continue
+        lab = parts[0]
+        # skip a header row
+        try:
+            mean = float(parts[1]); sd = float(parts[2])
+        except ValueError:
+            continue
+        n = int(float(parts[3])) if len(parts) >= 4 and parts[3] else None
+        entry = {"mean": mean, "sd": sd}
+        if n is not None:
+            entry["n"] = n
+        out[lab] = entry
+    return out
+
+
 def _section_data():
     st.header("Dados")
-    st.markdown("Cole os dados do Excel (formato **largo**: uma coluna por grupo, "
-                "ou **longo**: `Grupo | Valor`). Células vazias nunca viram zero.")
-    text = st.text_area("Colar dados", height=200,
-                        placeholder="A\tB\tC\n10.2\t13.5\t14.9\n...")
-    fmt = st.selectbox("Formato", ["auto-detectar", "largo", "longo"])
-    if st.button("Carregar dados") and text.strip():
-        fmt_arg = {"auto-detectar": None, "largo": "wide", "longo": "long"}[fmt]
-        raw, used = import_text(text, fmt_arg)
-        st.session_state["raw"] = raw
-        st.session_state["result"] = None
-        st.success(f"Formato usado: {used}. Grupos: {', '.join(raw.keys())}")
-    if st.session_state["raw"]:
-        st.subheader("Prévia")
-        st.write({k: v for k, v in st.session_state["raw"].items()})
+    kind = st.radio("Tipo de dados", ["Dados brutos (recomendado)",
+                                      "Estatísticas resumidas (Média, DP, n)"])
+    if kind.startswith("Dados brutos"):
+        st.session_state["data_kind"] = "RAW"
+        st.markdown("Cole os dados do Excel — formato **largo** (uma coluna por "
+                    "grupo) ou **longo** (`Grupo | Valor`). Células vazias nunca "
+                    "viram zero.")
+        text = st.text_area("Colar dados", height=200,
+                            placeholder="A\tB\tC\n10.2\t13.5\t14.9\n...")
+        fmt = st.selectbox("Formato", ["auto-detectar", "largo", "longo"])
+        if st.button("Carregar dados brutos") and text.strip():
+            fmt_arg = {"auto-detectar": None, "largo": "wide", "longo": "long"}[fmt]
+            raw, used = import_text(text, fmt_arg)
+            st.session_state["raw"] = raw
+            st.session_state["summary"] = None
+            st.session_state["result"] = None
+            st.success(f"Formato usado: {used}. Grupos: {', '.join(raw.keys())}")
+        if st.session_state.get("raw"):
+            st.subheader("Prévia")
+            st.write({k: v for k, v in st.session_state["raw"].items()})
+    else:
+        st.session_state["data_kind"] = "SUMMARY"
+        st.markdown("Uma linha por grupo: `Grupo, Média, DP, n`. **Sem o n, ANOVA/"
+                    "Tukey não podem ser realizados.** Diagnósticos que exigem dados "
+                    "brutos (resíduos, Q-Q, Shapiro, outliers) não são possíveis.")
+        text = st.text_area("Colar estatísticas resumidas", height=160,
+                            placeholder="A, 10.54, 1.21, 5\nB, 13.72, 0.84, 5\n"
+                                        "C, 15.19, 1.03, 6")
+        if st.button("Carregar dados resumidos") and text.strip():
+            summ = _parse_summary(text)
+            st.session_state["summary"] = summ
+            st.session_state["raw"] = None
+            st.session_state["result"] = None
+            missing_n = [l for l, s in summ.items() if "n" not in s]
+            if missing_n:
+                st.error("Os dados disponíveis são insuficientes para realizar "
+                         "ANOVA/Tukey. Informe o tamanho amostral (n) de cada "
+                         f"grupo. Faltando n em: {', '.join(missing_n)}.")
+            else:
+                st.success(f"Grupos: {', '.join(summ.keys())}")
+        if st.session_state.get("summary"):
+            st.subheader("Prévia")
+            st.write(st.session_state["summary"])
 
 
 def _section_design(mode):
@@ -157,11 +218,19 @@ def _build_design():
 
 
 def _run(mode, options):
-    raw = st.session_state.get("raw")
-    if not raw:
-        st.error("Carregue os dados primeiro (seção DADOS).")
-        return None
-    res = analyze_raw(raw, _build_design(), options)
+    kind = st.session_state.get("data_kind", "RAW")
+    if kind == "SUMMARY":
+        summ = st.session_state.get("summary")
+        if not summ:
+            st.error("Carregue os dados resumidos primeiro (seção DADOS).")
+            return None
+        res = analyze_summary(summ, _build_design(), options)
+    else:
+        raw = st.session_state.get("raw")
+        if not raw:
+            st.error("Carregue os dados primeiro (seção DADOS).")
+            return None
+        res = analyze_raw(raw, _build_design(), options)
     st.session_state["result"] = res
     return res
 
@@ -259,6 +328,19 @@ def _show_result_summary(res):
         st.markdown(f"**Método global:** ANOVA de Welch  \n"
                     f"F({int(o['df1'])}, {format_number(o['df2'],2)}) = "
                     f"{format_number(o['statistic'],4)} · p {_p(o['p'])} · α = {res.alpha}")
+    elif res.ttest:
+        t = res.ttest
+        st.markdown(f"**Método (2 grupos):** {t['method']}  \n"
+                    f"t({format_number(t['df'], 2)}) = "
+                    f"{format_number(t['statistic'], 4)} · p {_p(t['p'])} · "
+                    f"α = {res.alpha}  \n"
+                    f"Diferença ({t['group1']} − {t['group2']}) = "
+                    f"{format_number(t['diff'], 4)} · "
+                    f"IC{int(t['ci_level']*100)}% = "
+                    f"[{format_number(t['ci_low'],4)}, {format_number(t['ci_high'],4)}] · "
+                    f"d de Cohen = {format_number(t['cohens_d'], 4)}")
+    if res.summary_based:
+        st.caption("Análise realizada a partir de estatísticas resumidas.")
     st.info(res.interpretation.get("conclusion", ""))
 
     for w in res.warnings:
@@ -290,6 +372,18 @@ def _show_descriptive_with_letters(res):
 def _section_posthoc():
     st.header("Pós-testes")
     res = st.session_state.get("result")
+    if res and res.ttest:
+        t = res.ttest
+        st.info("Com dois grupos, a comparação é o próprio teste t (não há "
+                "pós-teste par a par como Tukey).")
+        import pandas as pd
+        st.dataframe(pd.DataFrame([{
+            "Método": t["method"], "Grupo 1": t["group1"], "Grupo 2": t["group2"],
+            "Diferença": t["diff"], "t": t["statistic"], "df": t["df"],
+            "p": t["p"], "IC inf": t["ci_low"], "IC sup": t["ci_high"],
+            "d de Cohen": t["cohens_d"],
+            "Signif.": "Sim" if t["significant"] else "Não"}]))
+        return
     if not res or not res.posthoc:
         st.info("Nenhum pós-teste disponível. Execute a análise; note que no modo "
                 "rápido o pós-teste não roda se o teste global não for significativo.")
@@ -317,7 +411,13 @@ def _section_plots():
         return
     raw = st.session_state.get("raw")
     letters = (res.cld or {}).get("display", {})
-    kind = st.selectbox("Tipo", ["Boxplot", "Média ± DP", "Média ± EP", "Média + IC"])
+    options = ["Média ± DP", "Média ± EP", "Média + IC"]
+    if raw:  # boxplot needs individual values
+        options = ["Boxplot"] + options
+    else:
+        st.caption("Boxplot indisponível: análise a partir de estatísticas "
+                   "resumidas (sem valores individuais).")
+    kind = st.selectbox("Tipo", options)
     try:
         if kind == "Boxplot":
             fig = sp.boxplot(raw, letters=letters)
@@ -327,6 +427,90 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_batch(mode):
+    st.header("Análise em lote (múltiplas variáveis)")
+    st.markdown("Cole uma tabela com uma coluna de **Grupo** seguida de várias "
+                "colunas de variáveis: `Grupo | Var1 | Var2 | ... | VarN`. Cada "
+                "variável é analisada separadamente.")
+    text = st.text_area("Colar tabela (largo, formato longo por grupo)", height=180,
+                        placeholder="Grupo\tPeso\tAltura\tpH\nA\t10.2\t1.5\t7.1\n"
+                                    "A\t10.5\t1.6\t7.0\nB\t13.1\t1.9\t6.8\n...")
+    alpha = st.number_input("α (lote)", 0.0001, 0.5, 0.05, 0.01, key="batch_alpha")
+    fdr = st.selectbox("Correção de multiplicidade entre variáveis (opcional)",
+                       ["Nenhuma (não aplicar)", "Holm (FWER)",
+                        "Benjamini-Hochberg (FDR)", "Bonferroni (FWER)"])
+    fdr_arg = {"Nenhuma (não aplicar)": None, "Holm (FWER)": "holm",
+               "Benjamini-Hochberg (FDR)": "bh", "Bonferroni (FWER)": "bonferroni"}[fdr]
+
+    if st.button("Analisar em lote") and text.strip():
+        variables = _parse_batch_table(text)
+        if not variables:
+            st.error("Não foi possível interpretar a tabela. Verifique o formato.")
+            return
+        opts = AnalysisOptions(alpha=alpha,
+                               mode="advanced" if mode == "Avançado" else "quick")
+        out = analyze_batch(variables, _build_design(), opts, fdr_method=fdr_arg)
+        st.session_state["batch_out"] = out
+
+    out = st.session_state.get("batch_out")
+    if not out:
+        return
+    cons = out["consolidated"]
+    st.write(f"Variáveis analisadas: **{cons['n_variables']}** · "
+             f"com teste global: **{cons['n_tested']}**")
+    for w in cons["warnings"]:
+        st.warning(w)
+
+    import pandas as pd
+    rows = []
+    fdr_adj = None
+    if cons.get("fdr"):
+        fdr_adj = dict(zip(cons["fdr"]["labels"], cons["fdr"]["p_adjusted"]))
+    for name, res in out["results"].items():
+        if res.refusals:
+            rows.append({"Variável": name, "Método": "—",
+                         "p (global)": None, "p ajustado": None,
+                         "Situação": "recusada: " + res.refusals[0][:40]})
+            continue
+        p = (res.omnibus or {}).get("p") if res.omnibus else (
+            res.ttest["p"] if res.ttest else None)
+        method = (res.omnibus_kind or ("t-test" if res.ttest else "—"))
+        rows.append({"Variável": name, "Método": method, "p (global)": p,
+                     "p ajustado": (fdr_adj or {}).get(name),
+                     "CLD": " ".join(f"{k}:{v}" for k, v in
+                                     (res.cld or {}).get("display", {}).items())})
+    st.dataframe(pd.DataFrame(rows))
+    if fdr_adj is not None:
+        st.caption(f"Correção aplicada: {cons['fdr']['method']}. As colunas 'p "
+                   "ajustado' controlam a multiplicidade ENTRE variáveis.")
+
+
+def _parse_batch_table(text: str):
+    """Parse 'Grupo, Var1, Var2, ...' rows into {var_name: {group: [values]}}."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return {}
+    def split(line):
+        return [c.strip() for c in (line.split("\t") if "\t" in line
+                                    else line.split(","))]
+    header = split(lines[0])
+    var_names = header[1:]
+    variables = {v: {} for v in var_names}
+    for line in lines[1:]:
+        parts = split(line)
+        if len(parts) < 2:
+            continue
+        group = parts[0]
+        for i, v in enumerate(var_names, start=1):
+            cell = parts[i] if i < len(parts) else ""
+            try:
+                val = float(cell) if cell != "" else None
+            except ValueError:
+                val = None
+            variables[v].setdefault(group, []).append(val)
+    return variables
 
 
 def _section_report():

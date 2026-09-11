@@ -97,6 +97,21 @@ def build_html_report(result, project_meta: Dict = None, decimals: int = 4) -> s
                             [[e["eta_squared"], e["omega_squared"],
                               e["partial_eta_squared"]]], decimals))
 
+    # Two-group t-test
+    tt = getattr(result, "ttest", None)
+    if tt:
+        parts.append(f"<h2>Comparação de dois grupos: {html.escape(tt['method'])}</h2>")
+        parts.append(_table(
+            ["Grupo 1", "Grupo 2", "Diferença", "t", "df", "p", "IC inf", "IC sup",
+             "d de Cohen", "Signif."],
+            [[tt["group1"], tt["group2"], tt["diff"], tt["statistic"], tt["df"],
+              format_p(tt["p"], decimals), tt["ci_low"], tt["ci_high"],
+              tt["cohens_d"], "Sim" if tt["significant"] else "Não"]], decimals))
+
+    if getattr(result, "summary_based", False):
+        parts.append("<p><i>Análise realizada a partir de estatísticas resumidas. "
+                     "Diagnósticos que exigem dados brutos não são possíveis.</i></p>")
+
     # Post-hoc + CLD
     if result.posthoc:
         parts.append(f"<h2>Pós-teste: {html.escape(result.posthoc['method'])}</h2>")
