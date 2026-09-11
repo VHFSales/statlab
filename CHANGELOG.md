@@ -2,9 +2,9 @@
 
 All notable changes to StatLab are documented here.
 
-## [Unreleased] — post-v1 methods
+## [1.1.0] — 2026-09-11
 
-Added, each in its own reviewed PR with numeric validation:
+New methods since 1.0, each in its own reviewed PR with numeric validation:
 - **Paired (dependent) data:** paired t-test (Cohen's dz) and Wilcoxon signed-rank
   (tie + continuity correction). Decision engine routes paired 2-condition designs
   to the paired test.
