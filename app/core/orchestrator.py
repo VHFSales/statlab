@@ -20,9 +20,9 @@ from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, correlation as corr_mod,
                         descriptive, effect_sizes, games_howell, nonparametric,
-                        paired as paired_mod, regression as reg_mod,
-                        repeated_measures as rm_mod, ttest, tukey,
-                        two_way_anova as two_way_mod, welch)
+                        factorial as factorial_mod, paired as paired_mod,
+                        regression as reg_mod, repeated_measures as rm_mod, ttest,
+                        tukey, two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -1002,4 +1002,86 @@ def analyze_regression(predictors: list, y: list, predictor_names: list = None,
         res.interpretation["conclusion"] = (
             "O modelo não explica uma parcela estatisticamente significativa da "
             "variação da resposta (ao nível α escolhido).")
+    return res
+
+
+
+def analyze_two_way_typed(a_vals: list, b_vals: list, y: list, ss_type: int = 2,
+                          factor_a: str = "Fator A", factor_b: str = "Fator B",
+                          options: AnalysisOptions = None) -> TwoWayAnalysisResult:
+    """Two-way ANOVA from per-observation vectors, with a chosen SS type (1/2/3).
+
+    Handles unbalanced designs. For balanced designs all types coincide.
+    """
+    options = options or AnalysisOptions()
+    alpha = options.alpha
+    res = TwoWayAnalysisResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=alpha,
+        factor_a=factor_a, factor_b=factor_b, a_levels=[], b_levels=[],
+        n_per_cell=0, effects=[], cell_descriptive=[], interpretation={},
+        warnings=[], refusals=[])
+
+    try:
+        tw = factorial_mod.two_way_anova_typed(a_vals, b_vals, y, ss_type=ss_type,
+                                               factor_a=factor_a, factor_b=factor_b)
+    except (factorial_mod.InsufficientDataError, ValueError) as exc:
+        res.refusals.append(str(exc))
+        return res
+
+    res.a_levels = tw.a_levels
+    res.b_levels = tw.b_levels
+    res.n_per_cell = tw.n_per_cell
+    res.effects = [asdict(e) for e in tw.effects]
+    res.method = tw.method
+
+    # per-cell descriptive (unbalanced -> cell sizes may differ)
+    cell_vals: Dict = {}
+    for a, b, v in zip(a_vals, b_vals, y):
+        if v is None:
+            continue
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue
+        if fv != fv:  # NaN
+            continue
+        cell_vals.setdefault((str(a), str(b)), []).append(fv)
+    for (ai, bj), vals in cell_vals.items():
+        d = descriptive.describe_group(f"{ai}|{bj}", vals, options.ci_level)
+        res.cell_descriptive.append({"a_level": ai, "b_level": bj, "n": d.n,
+                                     "mean": d.mean, "sd": d.sd})
+
+    def eff_text(e):
+        sig = e["p"] == e["p"] and e["p"] < alpha
+        verdict = ("efeito estatisticamente significativo" if sig
+                   else "sem efeito estatisticamente significativo")
+        err_df = next(x["df"] for x in res.effects if x["name"] == "Error")
+        return (f"{e['name']}: F({int(e['df'])}, {int(err_df)}) = "
+                f"{e['f']:.{options.decimals}f}, p "
+                + interpreter._p_rel(e["p"],
+                                     interpreter.format_p(e["p"], options.decimals))
+                + f", \u03b7\u00b2 parcial = {e['partial_eta_sq']:.{options.decimals}f}"
+                + f" ({verdict}).")
+
+    res.interpretation["effects"] = [
+        eff_text(e) for e in res.effects
+        if e["name"] in (factor_a, factor_b, f"{factor_a}:{factor_b}")]
+    inter = next(e for e in res.effects if e["name"] == f"{factor_a}:{factor_b}")
+    if inter["p"] == inter["p"] and inter["p"] < alpha:
+        res.interpretation["note"] = (
+            "A interação é significativa: os efeitos de um fator dependem do nível "
+            "do outro. Interprete os efeitos principais com cautela.")
+    else:
+        res.interpretation["note"] = (
+            "A interação não foi significativa; os efeitos principais podem ser "
+            "interpretados de forma mais direta (a ausência de significância não "
+            "prova ausência de interação).")
+    if tw.n_per_cell == -1:
+        res.warnings.append(
+            f"Delineamento desbalanceado: a soma de quadrados depende do tipo "
+            f"escolhido (usado Tipo {ss_type}). Tipos I, II e III atribuem SS "
+            f"diferentes aos efeitos quando os dados são desbalanceados.")
     return res

@@ -212,6 +212,17 @@ estimate. Guards: constant predictor, exact collinearity, and n ≤ p refused
 (singular design); missing rows dropped (never zeroed). The normal equations are
 solved by Gauss-Jordan with partial pivoting (no numpy).
 
+## 17h. Unbalanced factorial ANOVA — SS types (`tests/test_factorial_typed.py`)
+
+Balanced case: Types I/II/III all coincide and equal the validated balanced module
+(SS_A=108, SS_B=27, SS_AB=0, error=8). Unbalanced case: the error (full-model SSE)
+is invariant across types; Type I effects sum to the model SS (identity holds);
+Types differ for a main effect under imbalance (as they must). Computed by comparing
+nested OLS models' residual SS (statistics/factorial.py), with sum-to-zero coding so
+Type III contrasts are orthogonal. Guards: invalid type, empty cell, and
+insufficient error df refused. Orchestration (`analyze_two_way_typed`) warns that SS
+depends on the chosen type when the design is unbalanced.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -225,7 +236,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 217 (213 run + 4 oracle tests skipped when the
+- **Total automated tests:** 227 (223 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
