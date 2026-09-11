@@ -77,6 +77,37 @@ class TestDunn(unittest.TestCase):
         self.assertAlmostEqual(ab.mean2, 8.0, places=9)
 
 
+class TestMannWhitney(unittest.TestCase):
+    def test_separated_reference(self):
+        # A=[1..5], B=[6..10]: R1=15 -> U1=0, U2=25; z=-2.5067; p~0.0122
+        r = npm.mann_whitney(RawGroup("A", [1, 2, 3, 4, 5]),
+                             RawGroup("B", [6, 7, 8, 9, 10]))
+        self.assertAlmostEqual(r.u1, 0.0, places=9)
+        self.assertAlmostEqual(r.u2, 25.0, places=9)
+        self.assertAlmostEqual(r.u_statistic, 0.0, places=9)
+        self.assertAlmostEqual(r.z, -2.5067, places=3)
+        self.assertAlmostEqual(r.p, 0.01219, places=4)
+
+    def test_u1_plus_u2_equals_n1n2(self):
+        r = npm.mann_whitney(RawGroup("A", [3, 1, 4, 1, 5, 9]),
+                             RawGroup("B", [2, 6, 5, 3, 5]))
+        self.assertAlmostEqual(r.u1 + r.u2, r.n1 * r.n2, places=9)
+
+    def test_tie_correction_flag(self):
+        r = npm.mann_whitney(RawGroup("A", [1, 2, 2, 3]),
+                             RawGroup("B", [2, 3, 3, 4]))
+        self.assertTrue(r.tie_correction_applied)
+
+    def test_small_n_note(self):
+        r = npm.mann_whitney(RawGroup("A", [1, 2]), RawGroup("B", [3, 4]))
+        self.assertTrue(r.note)
+
+    def test_identical_groups_not_significant(self):
+        r = npm.mann_whitney(RawGroup("A", [5, 6, 7, 8]),
+                             RawGroup("B", [5, 6, 7, 8]))
+        self.assertGreater(r.p, 0.5)
+
+
 class TestDunnToCLD(unittest.TestCase):
     def test_cld_from_dunn_matrix(self):
         groups = [RawGroup("A", [1, 2, 3, 4, 5]),

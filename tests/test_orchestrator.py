@@ -81,6 +81,14 @@ class TestNonParametricFlow(unittest.TestCase):
         # rank wording, not "médias"
         self.assertIn("posto", res.interpretation["conclusion"].lower())
 
+    def test_two_groups_nonparametric_uses_mann_whitney(self):
+        res = analyze_raw({"A": [1, 2, 3, 4, 5], "B": [6, 7, 8, 9, 10]},
+                          DesignSpec(n_factors=1),
+                          AnalysisOptions(mode="advanced", nonparametric=True))
+        self.assertEqual(res.omnibus_kind, "mann_whitney")
+        self.assertIsNotNone(res.mann_whitney)
+        self.assertIsNone(res.nonparametric_omnibus)  # not Kruskal for 2 groups
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,6 +106,14 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Wording is rank-based: "at least one group tends to present different values
   (ranks)" — never "means differ".
 
+## Non-parametric: Mann-Whitney U (two groups)
+- Opt-in only (same guardrail as above). The rank-sum test for two independent
+  samples: tests whether one group tends to yield larger values than the other (a
+  distribution/rank shift), NOT a mean difference.
+- U1 = R1 − n1(n1+1)/2, U2 = n1·n2 − U1. Normal approximation with tie correction
+  and a continuity correction; p is two-sided. For very small n (< 5 in a group) the
+  approximation is flagged as only approximate (an exact test is a future item).
+
 ## Causality & interpretation
 A statistical difference does not imply causality; causal language depends on the
 design. StatLab never fabricates mechanistic explanations, never displays p = 0

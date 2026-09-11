@@ -72,6 +72,7 @@ class AnalysisResult:
     ttest: Optional[dict] = None        # two-group case
     summary_based: bool = False         # True when analysis used summary stats
     nonparametric_omnibus: Optional[dict] = None   # Kruskal-Wallis result
+    mann_whitney: Optional[dict] = None            # two-group non-parametric
     stale: bool = False
 
 
@@ -160,9 +161,25 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
     # --- non-parametric path (ADVANCED opt-in only; NEVER auto by Shapiro) ---
     if options.nonparametric:
         result.warnings.append(
-            "Método não-paramétrico selecionado explicitamente pelo usuário "
-            "(Kruskal-Wallis / Dunn). Esta escolha não foi feita automaticamente a "
-            "partir de um teste de normalidade.")
+            "Método não-paramétrico selecionado explicitamente pelo usuário. Esta "
+            "escolha não foi feita automaticamente a partir de um teste de "
+            "normalidade.")
+        # two groups -> Mann-Whitney U; three or more -> Kruskal-Wallis (+ Dunn)
+        if len(valid_groups) == 2:
+            mw = nonparametric.mann_whitney(valid_groups[0], valid_groups[1])
+            result.mann_whitney = asdict(mw)
+            result.omnibus_kind = "mann_whitney"
+            result.interpretation["omnibus"] = (
+                f"Mann-Whitney U = {mw.u_statistic:.{options.decimals}f} "
+                f"(z = {mw.z:.{options.decimals}f}), p "
+                + interpreter._p_rel(mw.p,
+                                     interpreter.format_p(mw.p, options.decimals))
+                + ".")
+            result.interpretation["conclusion"] = (
+                interpreter.omnibus_conclusion_rank(mw.p, alpha))
+            if mw.note:
+                result.warnings.append(mw.note)
+            return result
         kw = nonparametric.kruskal_wallis(valid_groups)
         result.nonparametric_omnibus = asdict(kw)
         result.omnibus_kind = "kruskal"
