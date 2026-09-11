@@ -182,6 +182,16 @@ A statistical difference does not imply causality; causal language depends on th
 design. StatLab never fabricates mechanistic explanations, never displays p = 0
 (uses "< 0.001"), and never rounds intermediate computations (only display values).
 
+## Multiplicity corrections (opt-in, across batch variables)
+When many hypotheses are tested together (e.g. one omnibus test per response
+variable), StatLab can adjust the family of p-values — opt-in, never automatic:
+- **FWER:** Bonferroni (p·m); Šidák (1−(1−p)^m, exact under independence); Holm and
+  Holm–Šidák (step-down, more powerful); Hochberg (step-up, valid under independence
+  or positive dependence, at least as powerful as Holm).
+- **FDR:** Benjamini–Hochberg (step-up).
+Within a single post-hoc (all pairwise comparisons), FWER is already controlled by
+Tukey/Games–Howell; these corrections apply to the *across-variable* family.
+
 ## Summary-data mode
 From (mean, SD, n) StatLab can compute classical ANOVA, Welch, Tukey/Tukey–Kramer,
 Games–Howell, and effect sizes via explicit summary formulas, validated against raw

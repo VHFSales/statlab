@@ -98,7 +98,9 @@ CI contains the difference; n<2 refused.
 
 Bonferroni scaling+clamp; Holm step-down with monotonicity (`[0.01,0.04,0.03]` →
 `[0.03,0.06,0.06]`); Benjamini–Hochberg (`[0.01..0.05]` → all 0.05) and BH ≤
-Bonferroni elementwise.
+Bonferroni elementwise. **Šidák** = 1−(1−p)^m (≤ Bonferroni); **Holm–Šidák**
+step-down (≤ Holm, monotone); **Hochberg** step-up (≤ Holm; `[0.01,0.04,0.03]` →
+`[0.03,0.04,0.04]`). All reachable via the `adjust` dispatcher.
 
 ## 12. Decision engine (`tests/test_decision_engine.py`) — guardrails
 
@@ -236,7 +238,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 227 (223 run + 4 oracle tests skipped when the
+- **Total automated tests:** 232 (228 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

@@ -1030,9 +1030,12 @@ def _section_batch(mode):
     alpha = st.number_input("α (lote)", 0.0001, 0.5, 0.05, 0.01, key="batch_alpha")
     fdr = st.selectbox("Correção de multiplicidade entre variáveis (opcional)",
                        ["Nenhuma (não aplicar)", "Holm (FWER)",
+                        "Holm-Šidák (FWER)", "Hochberg (FWER)", "Šidák (FWER)",
                         "Benjamini-Hochberg (FDR)", "Bonferroni (FWER)"])
     fdr_arg = {"Nenhuma (não aplicar)": None, "Holm (FWER)": "holm",
-               "Benjamini-Hochberg (FDR)": "bh", "Bonferroni (FWER)": "bonferroni"}[fdr]
+               "Holm-Šidák (FWER)": "holm-sidak", "Hochberg (FWER)": "hochberg",
+               "Šidák (FWER)": "sidak", "Benjamini-Hochberg (FDR)": "bh",
+               "Bonferroni (FWER)": "bonferroni"}[fdr]
 
     if st.button("Analisar em lote") and text.strip():
         variables = _parse_batch_table(text)

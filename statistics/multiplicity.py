@@ -81,6 +81,64 @@ def benjamini_hochberg(p: Sequence[float], alpha: float = 0.05,
                               note="Controla a FDR (taxa de falsas descobertas).")
 
 
+def sidak(p: Sequence[float], alpha: float = 0.05,
+          labels: Sequence[str] = None) -> MultiplicityResult:
+    """Šidák single-step correction (FWER).
+
+    Adjusted p = 1 - (1 - p)^m. Slightly less conservative than Bonferroni; exact
+    for independent tests.
+    """
+    m = len(p)
+    p_adj = [min(1.0, 1.0 - (1.0 - pi) ** m) for pi in p]
+    rejected = [pa <= alpha for pa in p_adj]
+    return MultiplicityResult("Šidák", alpha, list(p), p_adj, rejected,
+                              list(labels or []),
+                              note="Controla a FWER; exato para testes "
+                                   "independentes (menos conservador que Bonferroni).")
+
+
+def holm_sidak(p: Sequence[float], alpha: float = 0.05,
+               labels: Sequence[str] = None) -> MultiplicityResult:
+    """Holm-Šidák step-down (FWER); uniformly at least as powerful as Holm."""
+    m = len(p)
+    order = _order(p)
+    p_adj = [0.0] * m
+    running = 0.0
+    for rank, idx in enumerate(order):
+        val = 1.0 - (1.0 - p[idx]) ** (m - rank)
+        running = max(running, val)          # enforce monotonicity
+        p_adj[idx] = min(1.0, running)
+    rejected = [p_adj[i] <= alpha for i in range(m)]
+    return MultiplicityResult("Holm-Šidák", alpha, list(p), p_adj, rejected,
+                              list(labels or []),
+                              note="Controla a FWER (step-down); ao menos tão "
+                                   "potente quanto Holm.")
+
+
+def hochberg(p: Sequence[float], alpha: float = 0.05,
+             labels: Sequence[str] = None) -> MultiplicityResult:
+    """Hochberg step-up (FWER under independence / positive dependence).
+
+    Uses the same weights as Holm but a step-up procedure, so it is at least as
+    powerful as Holm; valid under the same conditions as Benjamini-Hochberg.
+    """
+    m = len(p)
+    order = _order(p)
+    p_adj = [0.0] * m
+    running = 1.0
+    # step-up from the largest p to the smallest, enforcing monotone non-increasing
+    for rank in range(m - 1, -1, -1):
+        idx = order[rank]
+        val = (m - rank) * p[idx]
+        running = min(running, val)
+        p_adj[idx] = min(1.0, running)
+    rejected = [p_adj[i] <= alpha for i in range(m)]
+    return MultiplicityResult("Hochberg", alpha, list(p), p_adj, rejected,
+                              list(labels or []),
+                              note="Controla a FWER (step-up) sob independência ou "
+                                   "dependência positiva; mais potente que Holm.")
+
+
 def adjust(p: Sequence[float], method: str = "holm", alpha: float = 0.05,
            labels: Sequence[str] = None) -> MultiplicityResult:
     method = method.lower()
@@ -90,4 +148,10 @@ def adjust(p: Sequence[float], method: str = "holm", alpha: float = 0.05,
         return holm(p, alpha, labels)
     if method in ("bh", "fdr", "benjamini-hochberg"):
         return benjamini_hochberg(p, alpha, labels)
+    if method in ("sidak", "šidák", "sidak-single"):
+        return sidak(p, alpha, labels)
+    if method in ("holm-sidak", "holm-šidák", "holm_sidak"):
+        return holm_sidak(p, alpha, labels)
+    if method in ("hochberg",):
+        return hochberg(p, alpha, labels)
     raise ValueError(f"Método de correção desconhecido: {method}")
