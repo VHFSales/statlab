@@ -100,10 +100,13 @@ Beyond the v1 core, the platform also includes: two-group t-tests (Student/Welch
 **non-parametric** tests — Mann–Whitney U (two groups) and Kruskal–Wallis → Dunn
 (three or more), opt-in only and never auto-selected from a normality test;
 **two-way (factorial) ANOVA** with interaction and partial η² (balanced designs);
-summary-data and batch analysis; opt-in multiplicity corrections (Holm/BH/
-Bonferroni); a registered outlier-exclusion flow with original-vs-after comparison;
-Q–Q and residuals-vs-fitted plots; and full persistence with deterministic
-reproduction configs, project save/reopen, and snapshots.
+**paired/dependent** comparison (paired t-test and Wilcoxon signed-rank);
+**repeated-measures** (Friedman → Nemenyi → CLD); **correlation** (Pearson &
+Spearman with Fisher-z CIs); summary-data and batch analysis; opt-in multiplicity
+corrections (Holm/BH/Bonferroni); a registered outlier-exclusion flow with
+original-vs-after comparison; Q–Q and residuals-vs-fitted plots; and full
+persistence with deterministic reproduction configs, project save/reopen, and
+snapshots.
 
 ## Documentation
 
@@ -115,7 +118,7 @@ reproduction configs, project save/reopen, and snapshots.
 
 ## Not in v1 (architecture is prepared)
 
-Unbalanced factorial ANOVA (with SS types); repeated-measures/mixed ANOVA, ANCOVA,
-MANOVA; paired-t; Wilcoxon signed-rank, Friedman; regression/correlation/GLM;
-exact (non-approximate) small-sample non-parametric p-values; multiuser server.
-Methods are added only when they can meet the same correctness bar.
+Unbalanced factorial ANOVA (with SS types); parametric repeated-measures/mixed
+ANOVA, ANCOVA, MANOVA; linear/multiple regression and GLM; exact (non-approximate)
+small-sample non-parametric p-values; multiuser server. Methods are added only when
+they can meet the same correctness bar.

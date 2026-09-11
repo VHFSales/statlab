@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "statlab"
-version = "1.0.0"
+version = "1.1.0"
 description = "Plataforma de análise estatística científica para laboratório (ANOVA/Welch/Tukey/Games-Howell/CLD, não-paramétricos, fatorial)"
 readme = "README.md"
 requires-python = ">=3.9"
