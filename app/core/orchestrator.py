@@ -19,8 +19,9 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, descriptive, effect_sizes,
-                        games_howell, nonparametric, paired as paired_mod, ttest,
-                        tukey, two_way_anova as two_way_mod, welch)
+                        games_howell, nonparametric, paired as paired_mod,
+                        repeated_measures as rm_mod, ttest, tukey,
+                        two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -785,4 +786,86 @@ def analyze_paired(x1: list, x2: list, condition1: str = "Condição 1",
                 res.warnings.append(wx.note)
     except paired_mod.InsufficientDataError as exc:
         res.refusals.append(str(exc))
+    return res
+
+
+
+@dataclass
+class RepeatedMeasuresResult:
+    analysis_id: str
+    created_at: str
+    program_version: str
+    core_version: str
+    python_version: str
+    alpha: float
+    condition_labels: list
+    n_blocks: int
+    omnibus: Optional[dict]        # FriedmanResult dict
+    posthoc: Optional[dict]        # Nemenyi PostHocResult dict
+    significance_matrix: Optional[dict]
+    cld: Optional[dict]
+    interpretation: dict
+    warnings: list
+    refusals: list
+    method: str = "Friedman (repeated measures)"
+
+
+def analyze_repeated_measures(blocks: list, condition_labels: list,
+                              options: AnalysisOptions = None
+                              ) -> RepeatedMeasuresResult:
+    """Non-parametric repeated-measures analysis: Friedman + Nemenyi + CLD.
+
+    ``blocks`` is a list of rows; each row has one value per condition (in
+    ``condition_labels`` order). Requires complete blocks (no missing).
+    """
+    options = options or AnalysisOptions()
+    alpha = options.alpha
+    res = RepeatedMeasuresResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=alpha,
+        condition_labels=list(condition_labels), n_blocks=0, omnibus=None,
+        posthoc=None, significance_matrix=None, cld=None, interpretation={},
+        warnings=[], refusals=[])
+    res.warnings.append(
+        "Teste de Friedman (não-paramétrico) para medidas repetidas. Esta escolha "
+        "é deliberada; o sistema não a faz automaticamente a partir de um teste de "
+        "normalidade. Friedman compara postos entre condições, não médias.")
+
+    try:
+        fr = rm_mod.friedman(blocks, condition_labels)
+    except rm_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
+        return res
+
+    res.n_blocks = fr.n_blocks
+    res.omnibus = asdict(fr)
+    res.interpretation["omnibus"] = (
+        f"Friedman: Q({fr.df}) = {fr.statistic:.{options.decimals}f}, p "
+        + interpreter._p_rel(fr.p, interpreter.format_p(fr.p, options.decimals))
+        + f" (correção de empates = {fr.tie_correction:.{options.decimals}f}).")
+    res.interpretation["conclusion"] = interpreter.omnibus_conclusion_rank(fr.p,
+                                                                           alpha)
+
+    run_posthoc = (fr.p < alpha)
+    if options.mode == "advanced" and options.force_posthoc:
+        run_posthoc = True
+    if not run_posthoc:
+        res.warnings.append(
+            "O teste global (Friedman) não apresentou significância estatística. "
+            "Comparações de Nemenyi não foram executadas automaticamente.")
+        return res
+
+    ph = rm_mod.nemenyi_test(blocks, condition_labels, alpha=alpha)
+    res.posthoc = asdict(ph)
+    sig = ph.significance_matrix()
+    res.significance_matrix = asdict(sig)
+    # CLD ordered by mean rank descending ("a" at the highest mean rank)
+    mr = fr.mean_ranks
+    cld_order = sorted(sig.labels, key=lambda l: mr.get(l, 0.0), reverse=True)
+    cld_res = cld.compact_letter_display(sig, order=cld_order)
+    res.cld = asdict(cld_res)
+    res.interpretation["posthoc"] = interpreter.posthoc_sentence(ph,
+                                                                 options.decimals)
     return res

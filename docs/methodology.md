@@ -106,6 +106,16 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Wording is rank-based: "at least one group tends to present different values
   (ranks)" — never "means differ".
 
+## Repeated measures (non-parametric): Friedman → Nemenyi
+- For 3+ related conditions measured on the same unit (complete block design).
+  Friedman ranks WITHIN each block, so it is the repeated-measures analogue of
+  Kruskal–Wallis. Opt-in; never auto-selected from a normality test.
+- **Friedman Q** with tie correction ~ χ²(k−1); compares rank locations across
+  conditions, not means. Requires complete blocks (no missing values).
+- **Nemenyi** post-hoc compares mean ranks using the studentized range at df = ∞;
+  its significance matrix feeds the generic CLD. Two conditions → use a paired test
+  instead.
+
 ## Paired (dependent) data: paired t-test & Wilcoxon signed-rank
 - For two conditions measured on the SAME experimental unit (before/after, matched
   pairs). Treating paired data as two independent groups is a design error the

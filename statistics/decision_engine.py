@@ -83,10 +83,23 @@ def recommend(design: DesignSpec, diag: Diagnostics, alpha: float = 0.05,
         return rec
 
     if design.repeated_measures:
+        if diag.k_groups is not None and diag.k_groups >= 3:
+            rec.method = "Friedman"
+            rec.posthoc = "Nemenyi"
+            rec.reasons.append(
+                "Foram declaradas medidas repetidas (3+ condições relacionadas). "
+                "O teste de Friedman (não-paramétrico) com pós-teste de Nemenyi é a "
+                "abordagem disponível nesta versão. A ANOVA de medidas repetidas "
+                "paramétrica ainda não foi implementada."
+            )
+            rec.warnings.append(
+                "Friedman exige delineamento de blocos completos (cada sujeito "
+                "medido em todas as condições, sem ausentes)."
+            )
+            return rec
         rec.refusals.append(
-            "Foram declaradas medidas repetidas; os grupos não são independentes. "
-            "Uma ANOVA de medidas repetidas (não implementada nesta versão) é a "
-            "abordagem apropriada. A ANOVA de uma via não será aplicada."
+            "Foram declaradas medidas repetidas com menos de 3 condições. Para 2 "
+            "condições dependentes, use um teste pareado (t pareado ou Wilcoxon)."
         )
         return rec
 

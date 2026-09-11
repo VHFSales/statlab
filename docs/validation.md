@@ -181,6 +181,17 @@ gives W+=7, W−=8, n=5, zeros=1 (hand-verified average ranks). Orchestration
 non-parametric opt-in; the decision engine routes paired 2-condition designs to the
 paired test and refuses paired 3+.
 
+## 17e. Repeated measures: Friedman / Nemenyi (`tests/test_repeated_measures.py`)
+
+Friedman Q=8.0 on a consistently-ranked 4×3 block design (hand-verified rank sums
+4/8/12; p = χ²-SF(8,2)); a 10-block consistent design is highly significant; tie
+correction applied; incomplete blocks / missing values / <3 conditions refused.
+Nemenyi SE = √(k(k+1)/(6n)) verified; separates the extreme pair at n=10; its matrix
+feeds the CLD (invariants hold, source="Nemenyi"). Orchestration
+(`analyze_repeated_measures`) runs Friedman then Nemenyi+CLD, suppresses the post-hoc
+on a non-significant omnibus, and uses rank-based conclusion wording. The decision
+engine routes repeated-measures 3+ to Friedman and refuses 2 conditions (→ paired).
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -194,7 +205,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 181 (177 run + 4 oracle tests skipped when the
+- **Total automated tests:** 193 (189 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
