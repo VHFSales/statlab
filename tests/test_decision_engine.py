@@ -56,9 +56,16 @@ class TestDecisionEngine(unittest.TestCase):
         self.assertTrue(r.is_refused)
         self.assertIsNone(r.method)
 
-    def test_repeated_measures_refused(self):
+    def test_repeated_measures_3plus_recommends_friedman(self):
         r = recommend(DesignSpec(n_factors=1, repeated_measures=True),
                       Diagnostics(k_groups=3))
+        self.assertFalse(r.is_refused)
+        self.assertEqual(r.method, "Friedman")
+        self.assertEqual(r.posthoc, "Nemenyi")
+
+    def test_repeated_measures_2_conditions_refused(self):
+        r = recommend(DesignSpec(n_factors=1, repeated_measures=True),
+                      Diagnostics(k_groups=2))
         self.assertTrue(r.is_refused)
 
     def test_paired_two_conditions_recommends_paired_test(self):

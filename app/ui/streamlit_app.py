@@ -73,7 +73,7 @@ def main():
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
         "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "PAREADO",
-        "LOTE", "RELATÓRIO", "EXPORTAR"])
+        "MEDIDAS REPETIDAS", "LOTE", "RELATÓRIO", "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -101,6 +101,8 @@ def main():
         _section_two_way()
     elif section == "PAREADO":
         _section_paired(mode)
+    elif section == "MEDIDAS REPETIDAS":
+        _section_repeated_measures()
     elif section == "LOTE":
         _section_batch(mode)
     elif section == "RELATÓRIO":
@@ -611,6 +613,94 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_repeated_measures():
+    st.header("Medidas repetidas (Friedman → Nemenyi)")
+    st.markdown("Para **3+ condições relacionadas medidas na mesma unidade** "
+                "(delineamento de blocos completos). Cole uma tabela onde **cada "
+                "linha é um sujeito/bloco** e **cada coluna é uma condição** "
+                "(`Cond1 | Cond2 | Cond3 | ...`). Teste não-paramétrico deliberado.")
+    text = st.text_area("Colar tabela (uma linha por bloco)", height=200,
+                        placeholder="C1\tC2\tC3\n1\t2\t3\n2\t3\t4\n1\t3\t5\n...")
+    alpha = st.number_input("α (Friedman)", 0.0001, 0.5, 0.05, 0.01, key="rm_alpha")
+    if st.button("Analisar medidas repetidas") and text.strip():
+        labels, blocks = _parse_block_matrix(text)
+        if not blocks:
+            st.error("Não foi possível interpretar a matriz de blocos.")
+            return
+        from app.core.orchestrator import (AnalysisOptions,
+                                           analyze_repeated_measures)
+        res = analyze_repeated_measures(blocks, labels, AnalysisOptions(alpha=alpha))
+        st.session_state["rm_result"] = res
+
+    res = st.session_state.get("rm_result")
+    if not res:
+        return
+    if res.refusals:
+        for r in res.refusals:
+            st.error(r)
+        return
+    for w in res.warnings:
+        st.warning(w)
+    st.subheader("RESULTADO")
+    st.markdown(res.interpretation.get("omnibus", ""))
+    st.info(res.interpretation.get("conclusion", ""))
+    import pandas as pd
+    if res.omnibus:
+        mr = res.omnibus["mean_ranks"]
+        letters = (res.cld or {}).get("display", {})
+        st.dataframe(pd.DataFrame([
+            {"Condição": k, "Posto médio": v, "Letras": letters.get(k, "")}
+            for k, v in mr.items()]))
+    if res.posthoc:
+        st.write(f"**Pós-teste:** {res.posthoc['method']}")
+        st.dataframe(pd.DataFrame([
+            {"Cond. 1": c["group1"], "Cond. 2": c["group2"],
+             "Dif. posto médio": c["diff"], "q": c["statistic"],
+             "p ajustado": c["p_adjusted"],
+             "Signif.": "Sim" if c["significant"] else "Não"}
+            for c in res.posthoc["comparisons"]]))
+        st.write(res.interpretation.get("posthoc", ""))
+
+
+def _parse_block_matrix(text: str):
+    """Parse a block x condition matrix; returns (labels, list-of-rows)."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return [], []
+
+    def split(line):
+        return [c.strip() for c in (line.split("\t") if "\t" in line
+                                    else line.split(","))]
+
+    first = split(lines[0])
+    # header if the first row is non-numeric
+    header_is_labels = False
+    try:
+        [float(x) for x in first]
+    except ValueError:
+        header_is_labels = True
+    if header_is_labels:
+        labels = first
+        data_lines = lines[1:]
+    else:
+        labels = [f"C{i+1}" for i in range(len(first))]
+        data_lines = lines
+    blocks = []
+    for line in data_lines:
+        parts = split(line)
+        row = []
+        ok = True
+        for p in parts:
+            try:
+                row.append(float(p))
+            except ValueError:
+                ok = False
+                break
+        if ok and row:
+            blocks.append(row)
+    return labels, blocks
 
 
 def _section_paired(mode):
