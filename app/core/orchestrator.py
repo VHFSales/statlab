@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, descriptive, effect_sizes,
-                        games_howell, ttest, tukey, welch)
+                        games_howell, nonparametric, ttest, tukey, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -42,6 +42,8 @@ class AnalysisOptions:
     force_posthoc: bool = False                 # advanced: run despite non-sig omnibus
     decimals: int = 4
     order: Optional[List[str]] = None           # visual order for CLD/summary
+    nonparametric: bool = False                 # advanced opt-in: Kruskal-Wallis+Dunn
+    dunn_adjust: str = "holm"                    # multiplicity adjust for Dunn
 
 
 @dataclass
@@ -69,6 +71,7 @@ class AnalysisResult:
     refusals: list
     ttest: Optional[dict] = None        # two-group case
     summary_based: bool = False         # True when analysis used summary stats
+    nonparametric_omnibus: Optional[dict] = None   # Kruskal-Wallis result
     stale: bool = False
 
 
@@ -152,6 +155,46 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
     result.warnings.extend(rec.warnings)
     if rec.is_refused:
         result.refusals.extend(rec.refusals)
+        return result
+
+    # --- non-parametric path (ADVANCED opt-in only; NEVER auto by Shapiro) ---
+    if options.nonparametric:
+        result.warnings.append(
+            "Método não-paramétrico selecionado explicitamente pelo usuário "
+            "(Kruskal-Wallis / Dunn). Esta escolha não foi feita automaticamente a "
+            "partir de um teste de normalidade.")
+        kw = nonparametric.kruskal_wallis(valid_groups)
+        result.nonparametric_omnibus = asdict(kw)
+        result.omnibus_kind = "kruskal"
+        result.interpretation["omnibus"] = (
+            f"Kruskal-Wallis: H({kw.df}) = {kw.statistic:.{options.decimals}f}, "
+            f"p " + interpreter._p_rel(kw.p,
+                                       interpreter.format_p(kw.p, options.decimals))
+            + f" (correção de empates = {kw.tie_correction:.{options.decimals}f}).")
+        result.interpretation["conclusion"] = interpreter.omnibus_conclusion_rank(
+            kw.p, alpha)
+        run_posthoc = (kw.p < alpha)
+        if options.mode == "advanced" and options.force_posthoc:
+            run_posthoc = True
+        if not run_posthoc:
+            result.warnings.append(
+                "O teste global (Kruskal-Wallis) não apresentou significância "
+                "estatística. Comparações de Dunn não foram executadas "
+                "automaticamente.")
+            return result
+        if len(valid_groups) < 3:
+            return result
+        ph = nonparametric.dunn_test(valid_groups, alpha=alpha,
+                                     adjust=options.dunn_adjust, order=order)
+        result.posthoc = asdict(ph)
+        sig = ph.significance_matrix()
+        result.significance_matrix = asdict(sig)
+        means = {d["label"]: d["mean"] for d in desc}
+        cld_order = sorted(sig.labels, key=lambda l: means.get(l, 0.0), reverse=True)
+        cld_res = cld.compact_letter_display(sig, order=cld_order)
+        result.cld = asdict(cld_res)
+        result.interpretation["posthoc"] = interpreter.posthoc_sentence(
+            ph, options.decimals)
         return result
 
     # --- two-group case: run a t-test instead of ANOVA/post-hoc ---

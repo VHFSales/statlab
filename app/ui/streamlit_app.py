@@ -310,6 +310,18 @@ def _section_analysis(mode):
                                  "Games-Howell": "games_howell"}[po]
         opts.force_posthoc = st.checkbox(
             "Executar pós-teste mesmo se o teste global não for significativo", False)
+        opts.nonparametric = st.checkbox(
+            "Usar teste NÃO-PARAMÉTRICO (Kruskal-Wallis → Dunn)", False)
+        if opts.nonparametric:
+            st.caption("A escolha do método não-paramétrico é sua e deliberada. O "
+                       "sistema NUNCA a faz automaticamente a partir de um teste de "
+                       "normalidade. Kruskal-Wallis compara distribuições/postos, "
+                       "não médias.")
+            adj = st.selectbox("Ajuste de multiplicidade (Dunn)",
+                               ["Holm", "Benjamini-Hochberg", "Bonferroni", "Nenhum"])
+            opts.dunn_adjust = {"Holm": "holm",
+                                "Benjamini-Hochberg": "bh",
+                                "Bonferroni": "bonferroni", "Nenhum": "none"}[adj]
 
     if st.button("Analisar"):
         res = _run(mode, opts)
@@ -337,6 +349,13 @@ def _show_result_summary(res):
         st.markdown(f"**Método global:** ANOVA de Welch  \n"
                     f"F({int(o['df1'])}, {format_number(o['df2'],2)}) = "
                     f"{format_number(o['statistic'],4)} · p {_p(o['p'])} · α = {res.alpha}")
+    elif res.omnibus_kind == "kruskal" and res.nonparametric_omnibus:
+        kw = res.nonparametric_omnibus
+        st.markdown(f"**Método global:** Kruskal-Wallis (não-paramétrico)  \n"
+                    f"H({kw['df']}) = {format_number(kw['statistic'], 4)} · "
+                    f"p {_p(kw['p'])} · α = {res.alpha}  \n"
+                    f"Correção de empates = {format_number(kw['tie_correction'], 4)}")
+        st.caption("Kruskal-Wallis compara distribuições/postos, não médias.")
     elif res.ttest:
         t = res.ttest
         st.markdown(f"**Método (2 grupos):** {t['method']}  \n"
@@ -399,10 +418,23 @@ def _section_posthoc():
         return
     import pandas as pd
     st.write(f"**Método:** {res.posthoc['method']}")
-    rows = [{"Grupo 1": c["group1"], "Grupo 2": c["group2"],
-             "Diferença": c["diff"], "IC inf": c["ci_low"], "IC sup": c["ci_high"],
-             "p ajustado": c["p_adjusted"], "Signif.": "Sim" if c["significant"]
-             else "Não"} for c in res.posthoc["comparisons"]]
+    is_dunn = res.omnibus_kind == "kruskal"
+    diff_label = "Dif. posto médio" if is_dunn else "Diferença"
+    if is_dunn:
+        rows = [{"Grupo 1": c["group1"], "Grupo 2": c["group2"],
+                 "Posto médio 1": c["mean1"], "Posto médio 2": c["mean2"],
+                 diff_label: c["diff"], "z": c["statistic"],
+                 "p ajustado": c["p_adjusted"],
+                 "Signif.": "Sim" if c["significant"] else "Não"}
+                for c in res.posthoc["comparisons"]]
+        st.caption("Dunn compara postos médios (não médias); não há IC de diferença "
+                   "de médias.")
+    else:
+        rows = [{"Grupo 1": c["group1"], "Grupo 2": c["group2"],
+                 diff_label: c["diff"], "IC inf": c["ci_low"],
+                 "IC sup": c["ci_high"], "p ajustado": c["p_adjusted"],
+                 "Signif.": "Sim" if c["significant"] else "Não"}
+                for c in res.posthoc["comparisons"]]
     st.dataframe(pd.DataFrame(rows))
     st.write(res.interpretation.get("posthoc", ""))
 

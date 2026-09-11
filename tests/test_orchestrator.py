@@ -53,5 +53,34 @@ class TestOrchestratorEndToEnd(unittest.TestCase):
         self.assertNotEqual(d1.data_hash, d2.data_hash)
 
 
+class TestNonParametricFlow(unittest.TestCase):
+    RAW = {"A": [1, 2, 3, 4, 5], "B": [6, 7, 8, 9, 10],
+           "C": [11, 12, 13, 14, 15]}
+
+    def test_optin_kruskal_dunn(self):
+        res = analyze_raw(self.RAW, DesignSpec(n_factors=1),
+                          AnalysisOptions(mode="advanced", nonparametric=True,
+                                          dunn_adjust="holm"))
+        self.assertEqual(res.omnibus_kind, "kruskal")
+        self.assertIsNotNone(res.nonparametric_omnibus)
+        self.assertIn("Dunn", res.posthoc["method"])
+        self.assertIsNotNone(res.cld)
+        # explicit-choice warning recorded (guardrail: not auto by normality)
+        self.assertTrue(any("não-paramétrico" in w.lower() or
+                            "nao-parametrico" in w.lower() for w in res.warnings))
+
+    def test_not_used_by_default(self):
+        # default options do NOT trigger the non-parametric path
+        res = analyze_raw(self.RAW, DesignSpec(n_factors=1), AnalysisOptions())
+        self.assertNotEqual(res.omnibus_kind, "kruskal")
+        self.assertIsNone(res.nonparametric_omnibus)
+
+    def test_conclusion_is_rank_based(self):
+        res = analyze_raw(self.RAW, DesignSpec(n_factors=1),
+                          AnalysisOptions(mode="advanced", nonparametric=True))
+        # rank wording, not "médias"
+        self.assertIn("posto", res.interpretation["conclusion"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

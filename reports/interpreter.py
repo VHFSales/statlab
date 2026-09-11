@@ -21,6 +21,19 @@ def omnibus_conclusion(p: float, alpha: float) -> str:
             "igualdade.)")
 
 
+def omnibus_conclusion_rank(p: float, alpha: float) -> str:
+    """Conclusion wording for rank-based (non-parametric) omnibus tests.
+
+    Kruskal-Wallis compares distributions/rank locations, NOT means.
+    """
+    if p < alpha:
+        return ("Há evidência estatística de que pelo menos um grupo tende a "
+                "apresentar valores (postos) diferentes dos demais.")
+    return ("Não há evidência estatística suficiente para afirmar que os grupos "
+            "diferem quanto à distribuição/posição (postos). A ausência de "
+            "significância não comprova igualdade das distribuições.")
+
+
 def apa_anova(table: AnovaTable, effects: Optional[EffectSizes],
               alpha: float = 0.05, decimals: int = 3) -> str:
     df1 = int(table.df_between)

@@ -142,6 +142,20 @@ in HTML and the Excel post-hoc sheet; batch CSV carries adjusted p.
 
 ---
 
+## 17b. Non-parametric: Kruskal–Wallis / Dunn (`tests/test_nonparametric.py`)
+
+- **χ² survival** via regularized incomplete gamma matches tabulated critical values:
+  χ²_{0.05}(2)=5.9915, χ²_{0.05}(3)=7.8147, χ²_{0.01}(2)=9.2103 (delta 1e-4).
+- **Kruskal–Wallis** matches the SciPy reference (H=0.7714, p=0.6799 to 3 places on
+  the Hollander–Wolfe-style dataset); separated groups [1..5]/[6..10]/[11..15] give
+  H=12.5; tie correction C<1 applied when ties are present.
+- **Dunn:** SE=√(N(N+1)/12·(1/n_i+1/n_j)) and z verified against hand computation
+  (SE=2.8284, z(A,B)=−1.7678); Holm adjustment verified (raw 0.00041 → 0.00122).
+  Mean ranks recorded (3/8/13). CLD from Dunn's matrix satisfies the invariants.
+- **Guardrail (spec §82):** the non-parametric path runs ONLY when explicitly
+  requested (Advanced mode `nonparametric=True`); it is never triggered by a
+  normality test. Verified in `tests/test_orchestrator.py::TestNonParametricFlow`.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -155,7 +169,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 131 (127 run + 4 oracle tests skipped when the
+- **Total automated tests:** 143 (139 run + 4 oracle tests skipped when the
   scientific stack is absent).
 - **All offline tests pass.**
 - **Outstanding:** oracle cross-validation must be executed once in an environment
