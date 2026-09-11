@@ -1,5 +1,7 @@
 # StatLab
 
+[![CI](https://github.com/VHFSales/statlab/actions/workflows/ci.yml/badge.svg)](https://github.com/VHFSales/statlab/actions/workflows/ci.yml)
+
 **A general-purpose scientific statistical platform for the comparison of
 independent groups.** Domain-neutral: it works for engineering, chemistry, physics,
 materials, biology, biomedicine, pharmacology, microbiology, polymers,
