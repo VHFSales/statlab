@@ -76,8 +76,9 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-91 automated tests pass offline (unittest). The numerical foundation is validated
-against closed-form identities and published tables:
+131 automated tests pass offline (unittest; see `docs/validation.md` for the full
+dossier). The numerical foundation is validated against closed-form identities and
+published tables:
 
 - F-distribution survival matches the exact form `(1 + 2F/n)^(-n/2)` to ~1e-19.
 - Studentized-range critical values match Harter tables to ~1e-4.
@@ -90,6 +91,12 @@ against closed-form identities and published tables:
 
 `tests/test_oracle.py` additionally cross-checks the core against SciPy/statsmodels
 when those are installed (skipped with a notice otherwise).
+
+Beyond the v1 core, the platform now also includes: two-group t-tests
+(Student/Welch), summary-data and batch analysis, opt-in multiplicity corrections
+(Holm/BH/Bonferroni), a registered outlier-exclusion flow with original-vs-after
+comparison, Q–Q and residuals-vs-fitted plots, and full persistence with
+deterministic reproduction configs and project snapshots.
 
 ## Documentation
 

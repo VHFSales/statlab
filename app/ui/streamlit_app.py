@@ -72,7 +72,8 @@ def main():
     mode = st.sidebar.radio("Modo", ["Rápido", "Avançado"])
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
-        "ANÁLISE", "PÓS-TESTES", "GRÁFICOS", "LOTE", "RELATÓRIO", "EXPORTAR"])
+        "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "LOTE", "RELATÓRIO",
+        "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -92,6 +93,8 @@ def main():
         _section_analysis(mode)
     elif section == "PÓS-TESTES":
         _section_posthoc()
+    elif section == "OUTLIERS":
+        _section_outliers()
     elif section == "GRÁFICOS":
         _section_plots()
     elif section == "LOTE":
@@ -404,6 +407,91 @@ def _section_posthoc():
     st.write(res.interpretation.get("posthoc", ""))
 
 
+def _section_outliers():
+    st.header("Diagnóstico de outliers")
+    raw = st.session_state.get("raw")
+    if st.session_state.get("data_kind") == "SUMMARY" or not raw:
+        st.info("O diagnóstico de outliers exige dados brutos (valores individuais). "
+                "A partir de estatísticas resumidas não é possível.")
+        return
+    st.warning("Outliers NUNCA são excluídos automaticamente. O diagnóstico apenas "
+               "sinaliza candidatos; a exclusão exige ação explícita e é registrada.")
+    from app.core.outlier_flow import compare_with_exclusions, diagnose_outliers
+
+    method = st.selectbox("Método de diagnóstico", ["IQR", "Grubbs"])
+    method_arg = "grubbs" if method == "Grubbs" else "iqr"
+    k = 1.5
+    if method_arg == "iqr":
+        k = st.slider("Fator k da cerca IQR", 1.0, 3.0, 1.5, 0.5)
+    flagged = diagnose_outliers(raw, method=method_arg, k=k,
+                                alpha=st.session_state.get("batch_alpha", 0.05))
+
+    import pandas as pd
+    rows = []
+    for group, items in flagged.items():
+        for it in items:
+            rows.append({"Grupo": group, "Valor": it["value"],
+                         "Critério": it["criterion"],
+                         "Limite inf": it.get("low"), "Limite sup": it.get("high"),
+                         "Estatística": it.get("statistic")})
+    if not rows:
+        st.success("Nenhum valor sinalizado como candidato a outlier.")
+        return
+    st.dataframe(pd.DataFrame(rows))
+
+    st.subheader("Exclusão registrada (opcional)")
+    st.caption("Selecione candidatos a excluir. A análise será refeita e comparada "
+               "com a original; a exclusão fica registrada (valor/grupo/motivo/"
+               "método/data).")
+    choices = [f"{r['Grupo']} = {r['Valor']}" for r in rows]
+    selected = st.multiselect("Candidatos a excluir", choices)
+    reason = st.text_input("Motivo da exclusão (obrigatório)")
+    if st.button("Excluir e comparar") and selected and reason.strip():
+        targets = []
+        for sel in selected:
+            g, v = sel.split(" = ")
+            targets.append({"group": g, "value": float(v)})
+        comp = compare_with_exclusions(raw, _build_design(), targets, reason,
+                                       method, st.session_state.get("last_options"))
+        st.session_state["outlier_comparison"] = comp
+        st.success(f"{len(comp.exclusions)} observação(ões) excluída(s) e registrada(s).")
+
+    comp = st.session_state.get("outlier_comparison")
+    if comp:
+        st.subheader("Comparação: original vs. após exclusão")
+        _show_comparison(comp)
+
+
+def _show_comparison(comp):
+    import pandas as pd
+
+    def summarize(res_dict):
+        o = res_dict.get("omnibus") or {}
+        kind = res_dict.get("omnibus_kind")
+        if kind == "anova":
+            stat = f"F = {format_number(o.get('f'), 4)}"
+        elif kind == "welch":
+            stat = f"F* = {format_number(o.get('statistic'), 4)}"
+        elif res_dict.get("ttest"):
+            stat = f"t = {format_number(res_dict['ttest']['statistic'], 4)}"
+            o = res_dict["ttest"]
+        else:
+            stat = "—"
+        cld = (res_dict.get("cld") or {}).get("display", {})
+        return {"Método": kind or ("t-test" if res_dict.get("ttest") else "—"),
+                "Estatística": stat, "p": format_p(o.get("p", float("nan"))),
+                "CLD": " ".join(f"{k}:{v}" for k, v in cld.items())}
+
+    st.dataframe(pd.DataFrame([
+        {"Análise": "Original", **summarize(comp.original)},
+        {"Análise": "Após exclusão", **summarize(comp.after_exclusion)},
+    ]))
+    st.markdown("**Exclusões registradas:**")
+    st.dataframe(pd.DataFrame(comp.exclusions))
+    st.caption("A comparação é informativa. A decisão de excluir observações é do "
+               "pesquisador e deve ser justificada cientificamente.")
+
+
 def _section_plots():
     st.header("Gráficos")
     res = st.session_state.get("result")
@@ -418,15 +506,23 @@ def _section_plots():
     raw = st.session_state.get("raw")
     letters = (res.cld or {}).get("display", {})
     options = ["Média ± DP", "Média ± EP", "Média + IC"]
-    if raw:  # boxplot needs individual values
-        options = ["Boxplot"] + options
+    if raw:  # these need individual values
+        options = ["Boxplot"] + options + ["Q-Q (resíduos)",
+                                           "Resíduos vs. ajustados"]
     else:
-        st.caption("Boxplot indisponível: análise a partir de estatísticas "
-                   "resumidas (sem valores individuais).")
+        st.caption("Boxplot, Q-Q e resíduos indisponíveis: análise a partir de "
+                   "estatísticas resumidas (sem valores individuais).")
     kind = st.selectbox("Tipo", options)
     try:
         if kind == "Boxplot":
             fig = sp.boxplot(raw, letters=letters)
+        elif kind == "Q-Q (resíduos)":
+            from statistics import assumptions
+            from statistics.types import RawGroup
+            groups = [RawGroup(g, v) for g, v in raw.items()]
+            fig = sp.qq_plot(assumptions.qq_points(assumptions.residuals(groups)))
+        elif kind == "Resíduos vs. ajustados":
+            fig = sp.residuals_vs_fitted(raw)
         else:
             err = {"Média ± DP": "sd", "Média ± EP": "se", "Média + IC": "ci"}[kind]
             fig = sp.mean_error_plot(res.descriptive, error=err, letters=letters)

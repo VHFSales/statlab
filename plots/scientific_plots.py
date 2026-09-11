@@ -114,6 +114,36 @@ def qq_plot(points, title="Q-Q plot dos resíduos", figsize=(6, 5)):
     return fig
 
 
+def residuals_vs_fitted(data, order=None,
+                        title="Resíduos vs. valores ajustados",
+                        figsize=(6, 5)):
+    """Residuals (x_ij - mean_i) against fitted values (group means).
+
+    ``data`` = {group: [values]}. Useful to inspect variance heterogeneity and
+    non-random residual structure (raw data only).
+    """
+    _require()
+    labs = _order(list(data.keys()), order)
+    fitted, resid = [], []
+    for lab in labs:
+        vals = [float(x) for x in data[lab]
+                if x is not None and not (isinstance(x, float) and math.isnan(x))]
+        if not vals:
+            continue
+        m = sum(vals) / len(vals)
+        for v in vals:
+            fitted.append(m)
+            resid.append(v - m)
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(fitted, resid, "o", alpha=0.6, markersize=4)
+    ax.axhline(0.0, color="#c00", alpha=0.6)
+    ax.set_xlabel("Valores ajustados (médias dos grupos)")
+    ax.set_ylabel("Resíduos")
+    ax.set_title(title)
+    fig.tight_layout()
+    return fig
+
+
 def save_figure(fig, path: str, dpi: int = 300):
     _require()
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
