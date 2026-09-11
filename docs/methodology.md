@@ -90,6 +90,22 @@ Letters are grouping symbols, not a ranking; "a" does not mean best/greatest. By
 convention "a" is assigned starting at the highest-mean group (purely visual).
 Supports more than 26 groups (a…z, aa, ab, …).
 
+## Non-parametric: Kruskal–Wallis → Dunn
+- **Opt-in only.** StatLab never switches to a non-parametric method automatically
+  because a normality test rejected (spec §82). The researcher selects it deliberately
+  (Advanced mode). The decision between parametric, robust, transformation, or
+  non-parametric considers the full statistical context.
+- **Kruskal–Wallis** tests whether ≥3 independent groups come from the same
+  distribution / have the same rank location. It compares **ranks**, not means.
+  Statistic H (with tie correction) ~ χ²(k−1). A significant KW says at least one
+  group tends to differ in rank location.
+- **Dunn's test** is the pairwise post-hoc: standardized differences of **mean ranks**
+  using the shared ranking, with multiplicity adjustment (Holm/BH/Bonferroni) across
+  the pairwise family. Reported as mean-rank differences and z statistics (no
+  mean-difference CI). CLD is derived from Dunn's significance matrix like any other.
+- Wording is rank-based: "at least one group tends to present different values
+  (ranks)" — never "means differ".
+
 ## Causality & interpretation
 A statistical difference does not imply causality; causal language depends on the
 design. StatLab never fabricates mechanistic explanations, never displays p = 0
