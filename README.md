@@ -121,6 +121,8 @@ snapshots.
 - `specs/tasks.md` — incremental implementation plan.
 - `specs/critical_review.md` — the statistical review that shaped the design.
 - `docs/methodology.md` — what each test does, assumptions, when (not) to use it.
+- `docs/manual_statlab.pdf` — end-user manual (PT-BR) for operating the app.
+- `docs/deploy_streamlit.md` — how to publish the app as a public link.
 
 ## Not in v1 (architecture is prepared)
 
