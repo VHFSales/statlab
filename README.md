@@ -78,9 +78,11 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-131 automated tests pass offline (unittest; see `docs/validation.md` for the full
-dossier). The numerical foundation is validated against closed-form identities and
-published tables:
+169 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
+job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
+numerical foundation is validated against closed-form identities and published
+tables:
 
 - F-distribution survival matches the exact form `(1 + 2F/n)^(-n/2)` to ~1e-19.
 - Studentized-range critical values match Harter tables to ~1e-4.
@@ -94,11 +96,14 @@ published tables:
 `tests/test_oracle.py` additionally cross-checks the core against SciPy/statsmodels
 when those are installed (skipped with a notice otherwise).
 
-Beyond the v1 core, the platform now also includes: two-group t-tests
-(Student/Welch), summary-data and batch analysis, opt-in multiplicity corrections
-(Holm/BH/Bonferroni), a registered outlier-exclusion flow with original-vs-after
-comparison, Q–Q and residuals-vs-fitted plots, and full persistence with
-deterministic reproduction configs and project snapshots.
+Beyond the v1 core, the platform also includes: two-group t-tests (Student/Welch);
+**non-parametric** tests — Mann–Whitney U (two groups) and Kruskal–Wallis → Dunn
+(three or more), opt-in only and never auto-selected from a normality test;
+**two-way (factorial) ANOVA** with interaction and partial η² (balanced designs);
+summary-data and batch analysis; opt-in multiplicity corrections (Holm/BH/
+Bonferroni); a registered outlier-exclusion flow with original-vs-after comparison;
+Q–Q and residuals-vs-fitted plots; and full persistence with deterministic
+reproduction configs, project save/reopen, and snapshots.
 
 ## Documentation
 
@@ -110,7 +115,7 @@ deterministic reproduction configs and project snapshots.
 
 ## Not in v1 (architecture is prepared)
 
-Factorial/repeated-measures/mixed ANOVA, ANCOVA, MANOVA; t / paired-t / Welch-t;
-Kruskal–Wallis→Dunn, Mann–Whitney, Wilcoxon, Friedman; regression/correlation/GLM;
-batch cross-variable FDR (Holm/Benjamini–Hochberg, opt-in); multiuser server.
+Unbalanced factorial ANOVA (with SS types); repeated-measures/mixed ANOVA, ANCOVA,
+MANOVA; paired-t; Wilcoxon signed-rank, Friedman; regression/correlation/GLM;
+exact (non-approximate) small-sample non-parametric p-values; multiuser server.
 Methods are added only when they can meet the same correctness bar.
