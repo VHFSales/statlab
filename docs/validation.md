@@ -160,6 +160,16 @@ in HTML and the Excel post-hoc sheet; batch CSV carries adjusted p.
   requested (Advanced mode `nonparametric=True`); it is never triggered by a
   normality test. Verified in `tests/test_orchestrator.py::TestNonParametricFlow`.
 
+## 17c. Two-way (factorial) ANOVA (`tests/test_two_way_anova.py`)
+
+Balanced 2×2, n=3 dataset: SS_A=108, SS_B=27, SS_AB=0, SS_error=8, SS_total=143
+(matches hand computation; decomposition identity holds); df=(1,1,1,8); F_A=108,
+F_B=27. A crossover dataset yields a dominant, highly significant interaction with
+weak main effects. Guards: unbalanced cells refused; missing cell refused; a single
+replicate per cell refused (no error df). Orchestration (`analyze_two_way`) produces
+the effect table, per-cell descriptives, and interaction-aware interpretation; the
+decision engine routes n_factors==2 to two-way and refuses 3+ factors.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -173,7 +183,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 149 (145 run + 4 oracle tests skipped when the
+- **Total automated tests:** 160 (156 run + 4 oracle tests skipped when the
   scientific stack is absent).
 - **All offline tests pass.**
 - **Outstanding:** oracle cross-validation must be executed once in an environment

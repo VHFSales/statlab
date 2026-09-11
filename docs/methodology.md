@@ -114,6 +114,17 @@ Supports more than 26 groups (a…z, aa, ab, …).
   and a continuity correction; p is two-sided. For very small n (< 5 in a group) the
   approximation is flagged as only approximate (an exact test is a future item).
 
+## Two-way (factorial) ANOVA
+- Two crossed fixed factors A and B with replicates per cell. Estimates the two main
+  effects and their **interaction**. Model
+  `y_ijk = μ + α_i + β_j + (αβ)_ij + e_ijk`.
+- **Balanced only** in this version (equal n per cell), where the SS decomposition is
+  orthogonal and Type I = II = III — unambiguous. Unbalanced designs are refused with
+  an explanation rather than silently choosing an SS type (spec §99).
+- Report per effect: SS, df, MS, F, p, partial η² = SS_effect/(SS_effect+SS_error).
+- **Interpretation:** if the interaction is significant, main effects must be read
+  with caution (the effect of one factor depends on the level of the other).
+
 ## Causality & interpretation
 A statistical difference does not imply causality; causal language depends on the
 design. StatLab never fabricates mechanistic explanations, never displays p = 0

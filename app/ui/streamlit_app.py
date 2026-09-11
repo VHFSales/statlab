@@ -72,8 +72,8 @@ def main():
     mode = st.sidebar.radio("Modo", ["Rápido", "Avançado"])
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
-        "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "LOTE", "RELATÓRIO",
-        "EXPORTAR"])
+        "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "LOTE",
+        "RELATÓRIO", "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -97,6 +97,8 @@ def main():
         _section_outliers()
     elif section == "GRÁFICOS":
         _section_plots()
+    elif section == "FATORIAL":
+        _section_two_way()
     elif section == "LOTE":
         _section_batch(mode)
     elif section == "RELATÓRIO":
@@ -569,6 +571,85 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_two_way():
+    st.header("ANOVA de duas vias (fatorial)")
+    st.markdown("Cole os dados no formato longo com **três colunas**: "
+                "`Fator A | Fator B | Valor`. Delineamento **balanceado** "
+                "(mesmo nº de repetições por célula) é exigido nesta versão.")
+    fa = st.text_input("Nome do Fator A", "Fator A")
+    fb = st.text_input("Nome do Fator B", "Fator B")
+    text = st.text_area("Colar dados (A, B, Valor)", height=200,
+                        placeholder="Dose, Material, Valor\n"
+                                    "Baixa, X, 10.2\nBaixa, X, 10.5\n"
+                                    "Baixa, Y, 12.1\nAlta, X, 9.8\n...")
+    alpha = st.number_input("α (fatorial)", 0.0001, 0.5, 0.05, 0.01,
+                            key="tw_alpha")
+    if st.button("Analisar fatorial") and text.strip():
+        cells = _parse_two_way(text)
+        if not cells:
+            st.error("Não foi possível interpretar a tabela (esperado A, B, Valor).")
+            return
+        from app.core.orchestrator import AnalysisOptions, analyze_two_way
+        res = analyze_two_way(cells, fa, fb, AnalysisOptions(alpha=alpha))
+        st.session_state["tw_result"] = res
+
+    res = st.session_state.get("tw_result")
+    if not res:
+        return
+    if res.refusals:
+        for r in res.refusals:
+            st.error(r)
+        return
+    import pandas as pd
+    st.subheader("Tabela ANOVA (duas vias)")
+    rows = []
+    for e in res.effects:
+        rows.append({
+            "Fonte": e["name"], "SS": e["ss"], "df": e["df"],
+            "MS": e["ms"] if e["ms"] == e["ms"] else None,
+            "F": e["f"] if e["f"] == e["f"] else None,
+            "p": format_p(e["p"]) if e["p"] == e["p"] else "",
+            "η² parcial": e["partial_eta_sq"] if e["partial_eta_sq"] ==
+            e["partial_eta_sq"] else None})
+    st.dataframe(pd.DataFrame(rows))
+    for line in res.interpretation.get("effects", []):
+        st.write("•", line)
+    st.info(res.interpretation.get("note", ""))
+    st.caption(f"Delineamento balanceado com n = {res.n_per_cell} por célula.")
+
+
+def _parse_two_way(text: str):
+    """Parse 'A, B, Valor' rows into {(a_level, b_level): [values]}."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return {}
+
+    def split(line):
+        return [c.strip() for c in (line.split("\t") if "\t" in line
+                                    else line.split(","))]
+
+    cells = {}
+    start = 0
+    # skip a header row if the third column is not numeric
+    first = split(lines[0])
+    if len(first) >= 3:
+        try:
+            float(first[2])
+        except ValueError:
+            start = 1
+    for line in lines[start:]:
+        parts = split(line)
+        if len(parts) < 3:
+            continue
+        a, b, v = parts[0], parts[1], parts[2]
+        try:
+            val = float(v)
+        except ValueError:
+            continue
+        cells.setdefault((a, b), []).append(val)
+    return cells
 
 
 def _section_batch(mode):

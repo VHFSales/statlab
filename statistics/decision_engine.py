@@ -60,12 +60,25 @@ def recommend(design: DesignSpec, diag: Diagnostics, alpha: float = 0.05,
               heteroscedastic_threshold_ratio: float = 3.0) -> Recommendation:
     rec = Recommendation(method=None, posthoc=None, run_posthoc=False, alpha=alpha)
 
-    # --- Design-level refusals / warnings -------------------------------- #
-    if design.n_factors is not None and design.n_factors >= 2:
+    # --- Design-level routing / refusals --------------------------------- #
+    if design.n_factors == 2:
+        rec.method = "two-way ANOVA"
+        rec.posthoc = None
+        rec.reasons.append(
+            "Foram declarados dois fatores cruzados: uma ANOVA de duas vias "
+            "(fatorial), que estima os dois efeitos principais e a interação, é o "
+            "método apropriado — não a ANOVA de uma via."
+        )
+        rec.warnings.append(
+            "A ANOVA de duas vias exige delineamento balanceado (mesmo nº de "
+            "repetições por célula) nesta versão."
+        )
+        return rec
+    if design.n_factors is not None and design.n_factors >= 3:
         rec.refusals.append(
-            "Foi identificado um possível delineamento fatorial (>= 2 fatores). "
-            "Uma ANOVA fatorial pode ser mais apropriada; a ANOVA de uma via não "
-            "será aplicada automaticamente."
+            "Foram declarados 3 ou mais fatores. ANOVA fatorial de ordem superior "
+            "não está implementada nesta versão; a ANOVA de uma via não será "
+            "aplicada automaticamente."
         )
         return rec
 
