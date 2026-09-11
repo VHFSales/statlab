@@ -219,19 +219,25 @@ def _build_design():
 
 def _run(mode, options):
     kind = st.session_state.get("data_kind", "RAW")
+    design = _build_design()
     if kind == "SUMMARY":
         summ = st.session_state.get("summary")
         if not summ:
             st.error("Carregue os dados resumidos primeiro (seção DADOS).")
             return None
-        res = analyze_summary(summ, _build_design(), options)
+        res = analyze_summary(summ, design, options)
+        st.session_state["last_data"] = summ
     else:
         raw = st.session_state.get("raw")
         if not raw:
             st.error("Carregue os dados primeiro (seção DADOS).")
             return None
-        res = analyze_raw(raw, _build_design(), options)
+        res = analyze_raw(raw, design, options)
+        st.session_state["last_data"] = raw
     st.session_state["result"] = res
+    st.session_state["last_options"] = options
+    st.session_state["last_design"] = design
+    st.session_state["last_kind"] = kind
     return res
 
 
@@ -537,6 +543,26 @@ def _section_export():
         path = export_excel(res, "statlab_export.xlsx",
                             project_meta=st.session_state["project"])
         st.success(f"Exportado para: {path}")
+
+    st.subheader("Reprodutibilidade")
+    st.caption("A configuração de reprodução contém os dados, α, método, "
+               "delineamento e versões — suficiente para refazer a análise de forma "
+               "idêntica.")
+    import json as _json
+    from persistence.result_store import build_repro_config, result_to_dict
+    cfg = build_repro_config(
+        st.session_state.get("last_data", {}),
+        st.session_state.get("last_kind", res.data_kind),
+        st.session_state.get("last_design", _build_design()),
+        st.session_state.get("last_options", AnalysisOptions(alpha=res.alpha)),
+        res)
+    st.download_button("Baixar configuração de reprodução (JSON)",
+                       _json.dumps(cfg, ensure_ascii=False, indent=2),
+                       file_name="statlab_repro.json", mime="application/json")
+    st.download_button("Baixar resultado completo (JSON)",
+                       _json.dumps(result_to_dict(res), ensure_ascii=False,
+                                   indent=2),
+                       file_name="statlab_result.json", mime="application/json")
 
 
 def _p(p):

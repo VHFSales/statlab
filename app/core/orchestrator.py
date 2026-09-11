@@ -443,3 +443,68 @@ def analyze_batch(variables: Dict[str, Dict[str, list]], design: EngineDesign,
         consolidated["fdr"] = asdict(adj)
 
     return {"results": results, "consolidated": consolidated}
+
+
+
+def reproduce_from_config(config: Dict) -> AnalysisResult:
+    """Re-run an analysis from a reproduction config (FR-19.2).
+
+    ``config`` is the dict produced by persistence.result_store.build_repro_config.
+    Rebuilds the design and options and dispatches to analyze_raw/analyze_summary.
+    """
+    design = EngineDesign(**{k: v for k, v in config.get("design", {}).items()
+                             if k in EngineDesign.__dataclass_fields__})
+    opt_fields = set(AnalysisOptions.__dataclass_fields__)
+    options = AnalysisOptions(**{k: v for k, v in config.get("options", {}).items()
+                                 if k in opt_fields})
+    data = config["data"]
+    if config.get("data_kind") == "SUMMARY":
+        return analyze_summary(data, design, options)
+    return analyze_raw(data, design, options)
+
+
+def results_match(a: AnalysisResult, b: AnalysisResult, tol: float = 1e-9) -> bool:
+    """Compare two results for statistical equivalence (ignores ids/timestamps).
+
+    Checks omnibus statistic/p, effect sizes, t-test, post-hoc adjusted p, and the
+    CLD display. Returns True if all present numeric quantities agree within tol.
+    """
+    def close(x, y):
+        if x is None and y is None:
+            return True
+        if x is None or y is None:
+            return False
+        try:
+            return abs(float(x) - float(y)) <= tol
+        except (TypeError, ValueError):
+            return x == y
+
+    if a.omnibus_kind != b.omnibus_kind:
+        return False
+    if a.omnibus and b.omnibus:
+        key = "f" if a.omnibus_kind == "anova" else "statistic"
+        if not close(a.omnibus.get(key), b.omnibus.get(key)):
+            return False
+        if not close(a.omnibus.get("p"), b.omnibus.get("p")):
+            return False
+    if a.ttest and b.ttest:
+        if not (close(a.ttest["statistic"], b.ttest["statistic"])
+                and close(a.ttest["p"], b.ttest["p"])):
+            return False
+    if a.effect_sizes and b.effect_sizes:
+        for k in ("eta_squared", "omega_squared"):
+            if not close(a.effect_sizes.get(k), b.effect_sizes.get(k)):
+                return False
+    if a.posthoc and b.posthoc:
+        ca = {(c["group1"], c["group2"]): c["p_adjusted"]
+              for c in a.posthoc["comparisons"]}
+        cb = {(c["group1"], c["group2"]): c["p_adjusted"]
+              for c in b.posthoc["comparisons"]}
+        if set(ca) != set(cb):
+            return False
+        for key in ca:
+            if not close(ca[key], cb[key]):
+                return False
+    if (a.cld or {}).get("display") != (b.cld or {}).get("display"):
+        return False
+    return True

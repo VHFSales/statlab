@@ -11,4 +11,7 @@ env/
 *.html
 statlab_export*
 statlab_report*
+statlab_repro*
+statlab_result*
+*.workspace.json
 .DS_Store
