@@ -91,6 +91,37 @@ class EffectSizes:
 
 
 @dataclass
+class RegressionCoefficient:
+    name: str
+    estimate: float
+    se: float
+    t: float
+    p: float
+    ci_low: float
+    ci_high: float
+
+
+@dataclass
+class RegressionResult:
+    """Ordinary least squares linear regression (simple or multiple)."""
+    method: str                 # "OLS linear regression"
+    predictors: List[str]       # predictor names (excludes intercept)
+    response: str
+    n: int
+    n_dropped: int
+    df_model: int
+    df_resid: int
+    coefficients: List[RegressionCoefficient]  # includes intercept first
+    r_squared: float
+    adj_r_squared: float
+    f_statistic: float
+    f_p: float
+    sigma: float                # residual standard error
+    ci_level: float
+    notes: List[str] = field(default_factory=list)
+
+
+@dataclass
 class CorrelationResult:
     """Bivariate correlation (Pearson or Spearman)."""
     method: str          # "Pearson" | "Spearman"
