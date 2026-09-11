@@ -91,9 +91,19 @@ def recommend(design: DesignSpec, diag: Diagnostics, alpha: float = 0.05,
         return rec
 
     if design.paired:
+        if diag.k_groups == 2:
+            rec.method = "paired test"
+            rec.reasons.append(
+                "Foram declaradas duas condições pareadas (dependentes). O teste "
+                "apropriado é o teste t pareado (ou Wilcoxon signed-rank, na versão "
+                "não-paramétrica) — não um teste para grupos independentes."
+            )
+            return rec
         rec.refusals.append(
-            "Foram declarados dados pareados; não devem ser tratados como grupos "
-            "independentes. Um teste apropriado para pares é necessário."
+            "Foram declarados dados pareados com um número de condições diferente "
+            "de 2. Um teste pareado de duas condições ou uma ANOVA de medidas "
+            "repetidas (para 3+ condições) é apropriado; a análise de grupos "
+            "independentes não será aplicada."
         )
         return rec
 

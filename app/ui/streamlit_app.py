@@ -72,8 +72,8 @@ def main():
     mode = st.sidebar.radio("Modo", ["Rápido", "Avançado"])
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
-        "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "LOTE",
-        "RELATÓRIO", "EXPORTAR"])
+        "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "PAREADO",
+        "LOTE", "RELATÓRIO", "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -99,6 +99,8 @@ def main():
         _section_plots()
     elif section == "FATORIAL":
         _section_two_way()
+    elif section == "PAREADO":
+        _section_paired(mode)
     elif section == "LOTE":
         _section_batch(mode)
     elif section == "RELATÓRIO":
@@ -609,6 +611,94 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_paired(mode):
+    st.header("Comparação pareada (dados dependentes)")
+    st.markdown("Para **duas condições medidas na mesma unidade** (antes/depois, "
+                "pares). Cole **duas colunas alinhadas par a par** "
+                "(`Condição 1 | Condição 2`). Não trate dados pareados como grupos "
+                "independentes.")
+    c1 = st.text_input("Nome da Condição 1", "Antes")
+    c2 = st.text_input("Nome da Condição 2", "Depois")
+    text = st.text_area("Colar dois valores por linha (C1, C2)", height=200,
+                        placeholder="Antes, Depois\n210, 200\n180, 170\n195, 188\n...")
+    alpha = st.number_input("α (pareado)", 0.0001, 0.5, 0.05, 0.01, key="pair_alpha")
+    nonparam = False
+    if mode == "Avançado":
+        nonparam = st.checkbox("Usar Wilcoxon signed-rank (não-paramétrico)", False)
+        if nonparam:
+            st.caption("Escolha não-paramétrica deliberada; o sistema não a faz "
+                       "automaticamente a partir de um teste de normalidade.")
+    if st.button("Analisar pareado") and text.strip():
+        x1, x2 = _parse_two_columns(text)
+        if not x1:
+            st.error("Não foi possível interpretar os dados (esperado 2 colunas).")
+            return
+        from app.core.orchestrator import AnalysisOptions, analyze_paired
+        opts = AnalysisOptions(alpha=alpha,
+                               mode="advanced" if mode == "Avançado" else "quick",
+                               nonparametric=nonparam)
+        st.session_state["paired_result"] = analyze_paired(x1, x2, c1, c2, opts)
+
+    res = st.session_state.get("paired_result")
+    if not res:
+        return
+    if res.refusals:
+        for r in res.refusals:
+            st.error(r)
+        return
+    for w in res.warnings:
+        st.warning(w)
+    st.subheader("RESULTADO")
+    st.markdown(res.interpretation.get("primary", ""))
+    st.info(res.interpretation.get("conclusion", ""))
+    import pandas as pd
+    if res.parametric:
+        p = res.parametric
+        st.dataframe(pd.DataFrame([{
+            "Pares (n)": p["n_pairs"], "Média das diferenças": p["mean_diff"],
+            "DP dif.": p["sd_diff"], "t": p["statistic"], "df": p["df"],
+            "p": p["p"], "IC inf": p["ci_low"], "IC sup": p["ci_high"],
+            "Cohen dz": p["cohens_dz"]}]))
+    if res.nonparametric:
+        w = res.nonparametric
+        st.dataframe(pd.DataFrame([{
+            "Pares (n)": w["n_pairs"], "W": w["w_statistic"], "W+": w["w_plus"],
+            "W-": w["w_minus"], "z": w["z"], "p": w["p"], "Zeros descartados":
+            w["n_zeros"]}]))
+
+
+def _parse_two_columns(text: str):
+    """Parse two aligned numeric columns; returns (x1, x2) with None for blanks."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+
+    def split(line):
+        return [c.strip() for c in (line.split("\t") if "\t" in line
+                                    else line.split(","))]
+
+    start = 0
+    if lines:
+        first = split(lines[0])
+        if len(first) >= 2:
+            try:
+                float(first[0]); float(first[1])
+            except ValueError:
+                start = 1  # header
+    x1, x2 = [], []
+    for line in lines[start:]:
+        parts = split(line)
+        if len(parts) < 2:
+            continue
+
+        def num(s):
+            try:
+                return float(s)
+            except ValueError:
+                return None
+        x1.append(num(parts[0]))
+        x2.append(num(parts[1]))
+    return x1, x2
 
 
 def _section_two_way():

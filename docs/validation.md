@@ -170,6 +170,17 @@ replicate per cell refused (no error df). Orchestration (`analyze_two_way`) prod
 the effect table, per-cell descriptives, and interaction-aware interpretation; the
 decision engine routes n_factors==2 to two-way and refuses 3+ factors.
 
+## 17d. Paired tests (`tests/test_paired.py`)
+
+Paired t-test matches hand computation (t, df=n−1, mean/SD of differences, Cohen's
+dz) on a before/after dataset; CI contains the mean difference; mismatched lengths,
+missing pairs (dropped, not zeroed), and zero-variance differences handled. Wilcoxon
+signed-rank: all-positive differences give W−=0; a mixed-sign dataset with a zero
+gives W+=7, W−=8, n=5, zeros=1 (hand-verified average ranks). Orchestration
+(`analyze_paired`) runs the paired t-test by default and Wilcoxon on the
+non-parametric opt-in; the decision engine routes paired 2-condition designs to the
+paired test and refuses paired 3+.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -183,7 +194,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 169 (165 run + 4 oracle tests skipped when the
+- **Total automated tests:** 181 (177 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

@@ -61,8 +61,13 @@ class TestDecisionEngine(unittest.TestCase):
                       Diagnostics(k_groups=3))
         self.assertTrue(r.is_refused)
 
-    def test_paired_refused(self):
+    def test_paired_two_conditions_recommends_paired_test(self):
         r = recommend(DesignSpec(n_factors=1, paired=True), Diagnostics(k_groups=2))
+        self.assertFalse(r.is_refused)
+        self.assertEqual(r.method, "paired test")
+
+    def test_paired_three_conditions_refused(self):
+        r = recommend(DesignSpec(n_factors=1, paired=True), Diagnostics(k_groups=3))
         self.assertTrue(r.is_refused)
 
     def test_technical_replicates_warns(self):
