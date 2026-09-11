@@ -71,8 +71,10 @@ def describe_group(label: str, values: Sequence[float],
 
     if n == 0:
         nan = math.nan
-        return DescriptiveRow(label, 0, n_missing, nan, nan, nan, nan, ci_level,
-                              nan, nan, nan, nan, nan, nan, nan, nan, nan)
+        return DescriptiveRow(
+            label=label, n=0, n_missing=n_missing, mean=nan, median=nan, sd=nan,
+            variance=nan, se=nan, ci_level=ci_level, ci_low=nan, ci_high=nan,
+            minimum=nan, maximum=nan, range=nan, q1=nan, q3=nan, iqr=nan, cv=nan)
 
     s = sorted(clean)
     total = math.fsum(clean)
@@ -97,7 +99,8 @@ def describe_group(label: str, values: Sequence[float],
         variance = sd = se = math.nan
         ci_low = ci_high = math.nan
 
-    cv = sd / mean if (n >= 2 and abs(mean) > 1e-15) else math.nan
+    # CV is conventionally non-negative (uses |mean|); NaN when mean ~ 0 or n < 2.
+    cv = sd / abs(mean) if (n >= 2 and abs(mean) > 1e-15) else math.nan
 
     return DescriptiveRow(
         label=label, n=n, n_missing=n_missing, mean=mean, median=med,

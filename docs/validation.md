@@ -183,9 +183,13 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 160 (156 run + 4 oracle tests skipped when the
-  scientific stack is absent).
-- **All offline tests pass.**
-- **Outstanding:** oracle cross-validation must be executed once in an environment
-  with SciPy/statsmodels (documented as technical risk TRK-2). No known numerical
-  defect.
+- **Total automated tests:** 169 (165 run + 4 oracle tests skipped when the
+  scientific stack is absent locally).
+- **All offline tests pass** on Python 3.9–3.13 (CI matrix).
+- **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
+  `oracle-tests` job): SciPy/statsmodels/numpy are installed and the
+  `tests/test_oracle.py` checks execute — closing the previously-outstanding
+  technical risk TRK-2. The pure-Python core is cross-validated against SciPy
+  (`f_oneway`, `studentized_range`) and statsmodels (`pairwise_tukeyhsd`) on every
+  push and pull request.
+- **No known numerical defect.**

@@ -174,9 +174,17 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
             "Método não-paramétrico selecionado explicitamente pelo usuário. Esta "
             "escolha não foi feita automaticamente a partir de um teste de "
             "normalidade.")
+        # rank-based tests admit n >= 1, so use a looser (non-empty) filter here
+        # than the n >= 2 filter used for parametric diagnostics.
+        np_groups = [g for g in groups if len(_clean(g.values)) >= 1]
+        dropped = [g.label for g in groups if len(_clean(g.values)) == 0]
+        if dropped:
+            result.warnings.append(
+                "ATENÇÃO: grupo(s) sem observações válidas removido(s) da análise: "
+                + ", ".join(dropped) + ".")
         # two groups -> Mann-Whitney U; three or more -> Kruskal-Wallis (+ Dunn)
-        if len(valid_groups) == 2:
-            mw = nonparametric.mann_whitney(valid_groups[0], valid_groups[1])
+        if len(np_groups) == 2:
+            mw = nonparametric.mann_whitney(np_groups[0], np_groups[1])
             result.mann_whitney = asdict(mw)
             result.omnibus_kind = "mann_whitney"
             result.interpretation["omnibus"] = (
@@ -190,7 +198,7 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
             if mw.note:
                 result.warnings.append(mw.note)
             return result
-        kw = nonparametric.kruskal_wallis(valid_groups)
+        kw = nonparametric.kruskal_wallis(np_groups)
         result.nonparametric_omnibus = asdict(kw)
         result.omnibus_kind = "kruskal"
         result.interpretation["omnibus"] = (
@@ -209,9 +217,9 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
                 "estatística. Comparações de Dunn não foram executadas "
                 "automaticamente.")
             return result
-        if len(valid_groups) < 3:
+        if len(np_groups) < 3:
             return result
-        ph = nonparametric.dunn_test(valid_groups, alpha=alpha,
+        ph = nonparametric.dunn_test(np_groups, alpha=alpha,
                                      adjust=options.dunn_adjust, order=order)
         result.posthoc = asdict(ph)
         sig = ph.significance_matrix()
@@ -374,7 +382,7 @@ def analyze_summary(summary: Dict[str, dict], design: EngineDesign,
             ci_low, ci_high = g.mean - tcrit * se, g.mean + tcrit * se
         else:
             ci_low = ci_high = float("nan")
-        cv = g.sd / g.mean if abs(g.mean) > 1e-15 else float("nan")
+        cv = g.sd / abs(g.mean) if abs(g.mean) > 1e-15 else float("nan")
         desc.append({"label": g.label, "n": g.n, "n_missing": 0, "mean": g.mean,
                      "median": float("nan"), "sd": g.sd, "variance": g.sd ** 2,
                      "se": se, "ci_level": options.ci_level, "ci_low": ci_low,
@@ -402,6 +410,15 @@ def analyze_summary(summary: Dict[str, dict], design: EngineDesign,
     result.warnings.extend(rec.warnings)
     if rec.is_refused:
         result.refusals.extend(rec.refusals)
+        return result
+
+    # a two-way design cannot be analysed by the one-way summary path either
+    if rec.method == "two-way ANOVA":
+        result.refusals.append(
+            "Foi declarado um delineamento com dois fatores. A ANOVA de duas vias "
+            "(fatorial) requer os dados por célula e não pode ser realizada a partir "
+            "destas estatísticas resumidas de uma via. A análise de uma via não é "
+            "apropriada aqui.")
         return result
 
     # two-group case not supported from summaries here (t-test needs the same
@@ -485,10 +502,12 @@ def analyze_batch(variables: Dict[str, Dict[str, list]], design: EngineDesign,
     names, pvals = [], []
     for name, r in results.items():
         p = None
-        if r.omnibus and r.omnibus_kind == "anova":
+        if r.omnibus and r.omnibus_kind in ("anova", "welch"):
             p = r.omnibus["p"]
-        elif r.omnibus and r.omnibus_kind == "welch":
-            p = r.omnibus["p"]
+        elif r.omnibus_kind == "kruskal" and r.nonparametric_omnibus:
+            p = r.nonparametric_omnibus["p"]
+        elif r.omnibus_kind == "mann_whitney" and r.mann_whitney:
+            p = r.mann_whitney["p"]
         elif r.ttest:
             p = r.ttest["p"]
         if p is not None:
