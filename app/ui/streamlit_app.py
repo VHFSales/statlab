@@ -73,7 +73,7 @@ def main():
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
         "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "PAREADO",
-        "MEDIDAS REPETIDAS", "LOTE", "RELATÓRIO", "EXPORTAR"])
+        "MEDIDAS REPETIDAS", "CORRELAÇÃO", "LOTE", "RELATÓRIO", "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -103,6 +103,8 @@ def main():
         _section_paired(mode)
     elif section == "MEDIDAS REPETIDAS":
         _section_repeated_measures()
+    elif section == "CORRELAÇÃO":
+        _section_correlation()
     elif section == "LOTE":
         _section_batch(mode)
     elif section == "RELATÓRIO":
@@ -613,6 +615,50 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_correlation():
+    st.header("Correlação (associação entre duas variáveis)")
+    st.markdown("Cole **duas colunas alinhadas** (`Variável X | Variável Y`), uma "
+                "medição de cada variável por unidade. **Correlação não implica "
+                "causalidade.**")
+    vx = st.text_input("Nome da Variável X", "X")
+    vy = st.text_input("Nome da Variável Y", "Y")
+    method = st.selectbox("Método", ["Pearson (linear)",
+                                     "Spearman (monotônica, postos)"])
+    method_arg = "spearman" if method.startswith("Spearman") else "pearson"
+    text = st.text_area("Colar dados (X, Y)", height=200,
+                        placeholder="X, Y\n10, 8.04\n8, 6.95\n13, 7.58\n...")
+    alpha = st.number_input("α (correlação)", 0.0001, 0.5, 0.05, 0.01,
+                            key="corr_alpha")
+    if st.button("Calcular correlação") and text.strip():
+        x, y = _parse_two_columns(text)
+        if not x:
+            st.error("Não foi possível interpretar os dados (esperado 2 colunas).")
+            return
+        from app.core.orchestrator import AnalysisOptions, analyze_correlation
+        res = analyze_correlation(x, y, vx, vy, method_arg,
+                                  AnalysisOptions(alpha=alpha))
+        st.session_state["corr_result"] = res
+
+    res = st.session_state.get("corr_result")
+    if not res:
+        return
+    if res.refusals:
+        for r in res.refusals:
+            st.error(r)
+        return
+    for w in res.warnings:
+        st.warning(w)
+    st.subheader("RESULTADO")
+    st.markdown(res.interpretation.get("primary", ""))
+    st.info(res.interpretation.get("conclusion", ""))
+    import pandas as pd
+    c = res.result
+    st.dataframe(pd.DataFrame([{
+        "Método": c["method"], "r": c["r"], "n": c["n"], "t": c["statistic"],
+        "df": c["df"], "p": c["p"], "IC inf": c["ci_low"], "IC sup": c["ci_high"],
+        "Significativo": "Sim" if c["significant"] else "Não"}]))
 
 
 def _section_repeated_measures():

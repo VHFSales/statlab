@@ -91,6 +91,24 @@ class EffectSizes:
 
 
 @dataclass
+class CorrelationResult:
+    """Bivariate correlation (Pearson or Spearman)."""
+    method: str          # "Pearson" | "Spearman"
+    r: float             # correlation coefficient
+    n: int               # complete pairs used
+    n_dropped: int
+    df: float            # n - 2 (for the t-based p)
+    statistic: float     # t
+    p: float             # two-sided
+    ci_level: float
+    ci_low: float        # Fisher-z CI (NaN if not computable)
+    ci_high: float
+    alpha: float
+    significant: bool
+    note: str = ""
+
+
+@dataclass
 class PairedTResult:
     """Paired (dependent) samples t-test on the within-pair differences."""
     method: str          # "Paired t-test"

@@ -2,6 +2,20 @@
 
 All notable changes to StatLab are documented here.
 
+## [Unreleased] — post-v1 methods
+
+Added, each in its own reviewed PR with numeric validation:
+- **Paired (dependent) data:** paired t-test (Cohen's dz) and Wilcoxon signed-rank
+  (tie + continuity correction). Decision engine routes paired 2-condition designs
+  to the paired test.
+- **Repeated measures (non-parametric):** Friedman test (tie correction) with the
+  Nemenyi post-hoc feeding the CLD. Routed for repeated-measures 3+ conditions.
+- **Correlation:** Pearson and Spearman with t-based p and Fisher-z confidence
+  intervals; interpretation states that correlation is not causation.
+
+Test suite grew from 169 to 204 tests. All remain validated against closed-form
+identities and published references (e.g. Anscombe I for Pearson).
+
 ## [1.0.0] — 2026-09-11
 
 First complete release: a domain-neutral scientific statistical platform for the
