@@ -48,6 +48,23 @@ class KruskalResult:
     method: str = "Kruskal-Wallis"
 
 
+@dataclass
+class MannWhitneyResult:
+    """Mann-Whitney U test for two independent samples (normal approximation)."""
+    u_statistic: float      # U reported (min of U1, U2 by convention)
+    u1: float
+    u2: float
+    z: float                # continuity-corrected z
+    p: float                # two-sided (normal approximation)
+    n1: int
+    n2: int
+    group1: str
+    group2: str
+    tie_correction_applied: bool
+    method: str = "Mann-Whitney U"
+    note: str = ""
+
+
 # --------------------------------------------------------------------------- #
 # Ranking with average ranks for ties
 # --------------------------------------------------------------------------- #
@@ -226,3 +243,65 @@ def dunn_test(groups: Sequence[RawGroup], alpha: float = 0.05,
     # mean1/mean2 here are MEAN RANKS (documented); diff is the mean-rank difference
     return PostHocResult(method=method_label, alpha=alpha,
                          comparisons=comparisons, labels=lab_sorted)
+
+
+
+def mann_whitney(group1: RawGroup, group2: RawGroup) -> MannWhitneyResult:
+    """Mann-Whitney U test (Wilcoxon rank-sum) for two independent samples.
+
+    Uses the normal approximation with tie correction and a continuity correction.
+    Tests whether one group tends to have larger values than the other (a shift in
+    distribution / rank location), NOT a difference in means. For very small n the
+    normal approximation is only approximate; an exact test is a future enhancement.
+
+    Formulas:
+      Rank all N = n1 + n2 observations jointly (average ranks for ties).
+      R1 = sum of ranks in group 1.
+      U1 = R1 - n1(n1+1)/2 ;  U2 = n1*n2 - U1.
+      mu_U = n1*n2/2
+      sigma_U^2 = (n1*n2/12) * [ (N+1) - ( Σ_t (t^3 - t) ) / (N(N-1)) ]   (tie-corrected)
+      z = (U1 - mu_U - 0.5*sign) / sigma_U   (continuity correction toward mu)
+      p = 2 * (1 - Phi(|z|))
+    """
+    v1 = _clean(group1.values)
+    v2 = _clean(group2.values)
+    n1, n2 = len(v1), len(v2)
+    if n1 < 1 or n2 < 1:
+        raise InsufficientDataError("Mann-Whitney requer pelo menos 1 valor por grupo.")
+    N = n1 + n2
+
+    all_vals = list(v1) + list(v2)
+    ranks, tie_sizes = _average_ranks(all_vals)
+    r1 = math.fsum(ranks[:n1])
+    u1 = r1 - n1 * (n1 + 1) / 2.0
+    u2 = n1 * n2 - u1
+
+    mu = n1 * n2 / 2.0
+    tie_sum = math.fsum(t ** 3 - t for t in tie_sizes)
+    tie_correction_applied = tie_sum > 0
+    if N > 1:
+        sigma2 = (n1 * n2 / 12.0) * ((N + 1) - tie_sum / (N * (N - 1)))
+    else:
+        sigma2 = 0.0
+    sigma = math.sqrt(sigma2) if sigma2 > 0 else 0.0
+
+    if sigma == 0:
+        z = 0.0
+        p = 1.0
+    else:
+        # continuity correction: move U1 toward the mean by 0.5
+        diff = u1 - mu
+        cc = 0.5 if diff > 0 else (-0.5 if diff < 0 else 0.0)
+        z = (diff - cc) / sigma
+        p = 2.0 * (1.0 - norm_cdf(abs(z)))
+        p = max(0.0, min(1.0, p))
+
+    note = ""
+    if min(n1, n2) < 5:
+        note = ("Amostra pequena (n < 5 em um grupo): a aproximação normal é apenas "
+                "aproximada; um teste exato seria preferível.")
+
+    return MannWhitneyResult(
+        u_statistic=min(u1, u2), u1=u1, u2=u2, z=z, p=p, n1=n1, n2=n2,
+        group1=group1.label, group2=group2.label,
+        tie_correction_applied=tie_correction_applied, note=note)

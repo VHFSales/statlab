@@ -349,6 +349,14 @@ def _show_result_summary(res):
         st.markdown(f"**Método global:** ANOVA de Welch  \n"
                     f"F({int(o['df1'])}, {format_number(o['df2'],2)}) = "
                     f"{format_number(o['statistic'],4)} · p {_p(o['p'])} · α = {res.alpha}")
+    elif res.omnibus_kind == "mann_whitney" and res.mann_whitney:
+        mw = res.mann_whitney
+        st.markdown(f"**Método (2 grupos):** Mann-Whitney U (não-paramétrico)  \n"
+                    f"U = {format_number(mw['u_statistic'], 4)} · "
+                    f"z = {format_number(mw['z'], 4)} · p {_p(mw['p'])} · "
+                    f"α = {res.alpha}")
+        st.caption("Mann-Whitney compara distribuições/postos entre dois grupos, "
+                   "não médias.")
     elif res.omnibus_kind == "kruskal" and res.nonparametric_omnibus:
         kw = res.nonparametric_omnibus
         st.markdown(f"**Método global:** Kruskal-Wallis (não-paramétrico)  \n"
