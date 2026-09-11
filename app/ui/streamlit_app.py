@@ -117,6 +117,44 @@ def _section_project():
     st.info("Metadados são livres (campo | valor) e NÃO alteram a análise "
             "estatística, a menos que você os transforme explicitamente em fatores.")
 
+    st.subheader("Salvar / reabrir projeto")
+    st.caption("O projeto é salvo como um arquivo JSON contendo os metadados, os "
+               "dados atuais, o delineamento e o último resultado — suficiente para "
+               "reabrir e continuar.")
+    import json as _json
+    from app.core.ui_session import (build_workspace_dict,
+                                     restore_from_workspace_dict)
+
+    data = (st.session_state.get("summary")
+            if st.session_state.get("data_kind") == "SUMMARY"
+            else st.session_state.get("raw"))
+    ws_dict = build_workspace_dict(
+        project=p, data_kind=st.session_state.get("data_kind", "RAW"),
+        data=data, design=st.session_state.get("design", {}),
+        result=st.session_state.get("result"))
+    st.download_button("Baixar projeto (.json)",
+                       _json.dumps(ws_dict, ensure_ascii=False, indent=2),
+                       file_name="statlab_projeto.json",
+                       mime="application/json")
+
+    up = st.file_uploader("Reabrir projeto (.json)", type=["json"])
+    if up is not None and st.button("Carregar projeto"):
+        try:
+            loaded = restore_from_workspace_dict(_json.loads(up.read()))
+            st.session_state["project"] = loaded["project"] or p
+            st.session_state["data_kind"] = loaded["data_kind"]
+            if loaded["data_kind"] == "SUMMARY":
+                st.session_state["summary"] = loaded["data"]
+                st.session_state["raw"] = None
+            else:
+                st.session_state["raw"] = loaded["data"]
+                st.session_state["summary"] = None
+            st.session_state["design"] = loaded["design"] or {}
+            st.session_state["result"] = loaded["result"]
+            st.success("Projeto carregado. Verifique as seções DADOS e ANÁLISE.")
+        except Exception as exc:
+            st.error(f"Falha ao carregar o projeto: {exc}")
+
 
 def _parse_summary(text: str):
     """Parse 'Grupo | Média | DP | n' rows (comma or tab separated)."""
