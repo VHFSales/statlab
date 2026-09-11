@@ -19,7 +19,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, descriptive, effect_sizes,
-                        games_howell, nonparametric, ttest, tukey, welch)
+                        games_howell, nonparametric, ttest, tukey,
+                        two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -156,6 +157,15 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
     result.warnings.extend(rec.warnings)
     if rec.is_refused:
         result.refusals.extend(rec.refusals)
+        return result
+
+    # a two-way design cannot be analysed by the one-way path; direct the user
+    if rec.method == "two-way ANOVA":
+        result.refusals.append(
+            "Foi declarado um delineamento com dois fatores. Use a ANOVA de duas "
+            "vias (analyze_two_way / seção FATORIAL na interface), que estima os "
+            "dois efeitos principais e a interação. A análise de uma via não é "
+            "apropriada aqui.")
         return result
 
     # --- non-parametric path (ADVANCED opt-in only; NEVER auto by Shapiro) ---
@@ -568,3 +578,92 @@ def results_match(a: AnalysisResult, b: AnalysisResult, tol: float = 1e-9) -> bo
     if (a.cld or {}).get("display") != (b.cld or {}).get("display"):
         return False
     return True
+
+
+
+@dataclass
+class TwoWayAnalysisResult:
+    analysis_id: str
+    created_at: str
+    program_version: str
+    core_version: str
+    python_version: str
+    alpha: float
+    factor_a: str
+    factor_b: str
+    a_levels: list
+    b_levels: list
+    n_per_cell: int
+    effects: list                 # list of EffectRow dicts
+    cell_descriptive: list        # per-cell n/mean/sd
+    interpretation: dict
+    warnings: list
+    refusals: list
+    method: str = "Two-way ANOVA (balanced)"
+
+
+def analyze_two_way(cells: Dict, factor_a: str = "Fator A",
+                    factor_b: str = "Fator B",
+                    options: AnalysisOptions = None) -> TwoWayAnalysisResult:
+    """Balanced two-way ANOVA orchestration.
+
+    ``cells`` maps (a_level, b_level) -> list of observations.
+    """
+    options = options or AnalysisOptions()
+    alpha = options.alpha
+    res = TwoWayAnalysisResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=alpha,
+        factor_a=factor_a, factor_b=factor_b, a_levels=[], b_levels=[],
+        n_per_cell=0, effects=[], cell_descriptive=[], interpretation={},
+        warnings=[], refusals=[])
+
+    try:
+        tw = two_way_mod.two_way_anova(cells, factor_a, factor_b)
+    except two_way_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
+        return res
+
+    res.a_levels = tw.a_levels
+    res.b_levels = tw.b_levels
+    res.n_per_cell = tw.n_per_cell
+    res.effects = [asdict(e) for e in tw.effects]
+
+    # per-cell descriptive
+    for (ai, bj), vals in cells.items():
+        clean = descriptive._clean(vals)
+        if not clean:
+            continue
+        d = descriptive.describe_group(f"{ai}|{bj}", vals, options.ci_level)
+        res.cell_descriptive.append({
+            "a_level": ai, "b_level": bj, "n": d.n, "mean": d.mean, "sd": d.sd})
+
+    # interpretation for each effect
+    def eff_text(e):
+        sig = e["p"] < alpha
+        verdict = ("efeito estatisticamente significativo" if sig
+                   else "sem efeito estatisticamente significativo")
+        return (f"{e['name']}: F({int(e['df'])}, "
+                f"{int(tw.by_name('Error').df)}) = "
+                f"{e['f']:.{options.decimals}f}, p "
+                + interpreter._p_rel(e["p"],
+                                     interpreter.format_p(e["p"], options.decimals))
+                + f", \u03b7\u00b2 parcial = {e['partial_eta_sq']:.{options.decimals}f}"
+                + f" ({verdict}).")
+
+    lines = [eff_text(e) for e in res.effects if e["name"] in
+             (factor_a, factor_b, f"{factor_a}:{factor_b}")]
+    res.interpretation["effects"] = lines
+    inter = tw.by_name(f"{factor_a}:{factor_b}")
+    if inter.p < alpha:
+        res.interpretation["note"] = (
+            "A interação é significativa: os efeitos de um fator dependem do nível "
+            "do outro. Interprete os efeitos principais com cautela.")
+    else:
+        res.interpretation["note"] = (
+            "A interação não foi significativa; os efeitos principais podem ser "
+            "interpretados de forma mais direta (a ausência de significância não "
+            "prova ausência de interação).")
+    return res

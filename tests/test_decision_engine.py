@@ -46,8 +46,13 @@ class TestDecisionEngine(unittest.TestCase):
                                   brown_forsythe_p=0.001))
         self.assertEqual(r.method, "Welch's t-test")
 
-    def test_multiple_factors_refused(self):
+    def test_two_factors_recommends_two_way(self):
         r = recommend(DesignSpec(n_factors=2), Diagnostics(k_groups=4))
+        self.assertFalse(r.is_refused)
+        self.assertEqual(r.method, "two-way ANOVA")
+
+    def test_three_factors_refused(self):
+        r = recommend(DesignSpec(n_factors=3), Diagnostics(k_groups=8))
         self.assertTrue(r.is_refused)
         self.assertIsNone(r.method)
 
