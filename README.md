@@ -58,8 +58,12 @@ python3 -m unittest discover -s tests
 
 # Full application (import/plots/export/UI):
 pip install -r requirements.txt
-streamlit run app/ui/streamlit_app.py
+streamlit run streamlit_app.py          # or: streamlit run app/ui/streamlit_app.py
 ```
+
+**Publish it as a public link (no install for end users):** deploy to Streamlit
+Community Cloud — the repo is ready (root `streamlit_app.py`, `requirements.txt`,
+`.streamlit/config.toml`). See [`docs/deploy_streamlit.md`](docs/deploy_streamlit.md).
 
 Programmatic use of the validated engine:
 

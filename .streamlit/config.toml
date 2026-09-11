@@ -1,0 +1,12 @@
+# Streamlit configuration for StatLab (local and Streamlit Community Cloud).
+
+[theme]
+primaryColor = "#1f4e79"
+base = "light"
+
+[server]
+# Cloud sets its own port/address; these are harmless defaults for local runs.
+headless = true
+
+[browser]
+gatherUsageStats = false
