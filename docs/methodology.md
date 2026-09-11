@@ -106,6 +106,18 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Wording is rank-based: "at least one group tends to present different values
   (ranks)" — never "means differ".
 
+## Paired (dependent) data: paired t-test & Wilcoxon signed-rank
+- For two conditions measured on the SAME experimental unit (before/after, matched
+  pairs). Treating paired data as two independent groups is a design error the
+  decision engine guards against.
+- **Paired t-test:** work on the within-pair differences d = x1 − x2; t = mean(d)/
+  (sd(d)/√n), df = n−1, two-sided p; effect size Cohen's dz = mean(d)/sd(d).
+- **Wilcoxon signed-rank** (non-parametric, opt-in): rank |d|, drop zero
+  differences, W± = signed rank sums; normal approximation with tie + continuity
+  correction. Small-n (< 10) flagged as approximate.
+- Inputs must be aligned pair-by-pair; pairs missing on either side are dropped and
+  reported, never zero-filled.
+
 ## Non-parametric: Mann-Whitney U (two groups)
 - Opt-in only (same guardrail as above). The rank-sum test for two independent
   samples: tests whether one group tends to yield larger values than the other (a

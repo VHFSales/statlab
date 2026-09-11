@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, descriptive, effect_sizes,
-                        games_howell, nonparametric, ttest, tukey,
-                        two_way_anova as two_way_mod, welch)
+                        games_howell, nonparametric, paired as paired_mod, ttest,
+                        tukey, two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -685,4 +685,104 @@ def analyze_two_way(cells: Dict, factor_a: str = "Fator A",
             "A interação não foi significativa; os efeitos principais podem ser "
             "interpretados de forma mais direta (a ausência de significância não "
             "prova ausência de interação).")
+    return res
+
+
+
+@dataclass
+class PairedAnalysisResult:
+    analysis_id: str
+    created_at: str
+    program_version: str
+    core_version: str
+    python_version: str
+    alpha: float
+    condition1: str
+    condition2: str
+    n_pairs: int
+    n_dropped: int
+    parametric: Optional[dict]        # PairedTResult dict
+    nonparametric: Optional[dict]     # WilcoxonResult dict
+    descriptive_diff: Optional[dict]  # descriptive of the paired differences
+    interpretation: dict
+    warnings: list
+    refusals: list
+    method: str = "Paired comparison"
+
+
+def analyze_paired(x1: list, x2: list, condition1: str = "Condição 1",
+                   condition2: str = "Condição 2", options: AnalysisOptions = None
+                   ) -> PairedAnalysisResult:
+    """Paired (dependent) two-condition comparison.
+
+    Runs the paired t-test and, in advanced/non-parametric mode, the Wilcoxon
+    signed-rank test. Inputs must be aligned pair-by-pair (same length); pairs with
+    a missing value on either side are dropped and reported (never zero-filled).
+    """
+    options = options or AnalysisOptions()
+    alpha = options.alpha
+    res = PairedAnalysisResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=alpha,
+        condition1=condition1, condition2=condition2, n_pairs=0, n_dropped=0,
+        parametric=None, nonparametric=None, descriptive_diff=None,
+        interpretation={}, warnings=[], refusals=[])
+
+    try:
+        a, b, dropped = paired_mod._aligned_pairs(x1, x2)
+    except paired_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
+        return res
+    res.n_pairs = len(a)
+    res.n_dropped = dropped
+    if dropped:
+        res.warnings.append(
+            f"{dropped} par(es) com valor ausente em uma das condições foram "
+            f"descartados (nunca convertidos em zero).")
+    if len(a) < 2:
+        res.refusals.append("São necessários pelo menos 2 pares completos.")
+        return res
+
+    # descriptive of the within-pair differences
+    diffs = [ai - bi for ai, bi in zip(a, b)]
+    dd = descriptive.describe_group(f"{condition1}-{condition2}", diffs,
+                                    options.ci_level)
+    res.descriptive_diff = asdict(dd)
+
+    use_nonparam = options.nonparametric
+    try:
+        if not use_nonparam:
+            pt = paired_mod.paired_t_test(x1, x2, condition1, condition2, alpha,
+                                          options.ci_level)
+            res.parametric = asdict(pt)
+            res.interpretation["primary"] = (
+                f"Teste t pareado: t({int(pt.df)}) = "
+                f"{pt.statistic:.{options.decimals}f}, p "
+                + interpreter._p_rel(pt.p,
+                                     interpreter.format_p(pt.p, options.decimals))
+                + f", d de Cohen (dz) = {pt.cohens_dz:.{options.decimals}f}.")
+            res.interpretation["conclusion"] = interpreter.omnibus_conclusion(pt.p,
+                                                                              alpha)
+        else:
+            res.warnings.append(
+                "Teste não-paramétrico selecionado explicitamente (Wilcoxon "
+                "signed-rank). Esta escolha não foi feita automaticamente a partir "
+                "de um teste de normalidade.")
+            wx = paired_mod.wilcoxon_signed_rank(x1, x2, condition1, condition2,
+                                                 alpha)
+            res.nonparametric = asdict(wx)
+            res.interpretation["primary"] = (
+                f"Wilcoxon signed-rank: W = {wx.w_statistic:.{options.decimals}f} "
+                f"(z = {wx.z:.{options.decimals}f}), p "
+                + interpreter._p_rel(wx.p,
+                                     interpreter.format_p(wx.p, options.decimals))
+                + ".")
+            res.interpretation["conclusion"] = (
+                interpreter.omnibus_conclusion_rank(wx.p, alpha))
+            if wx.note:
+                res.warnings.append(wx.note)
+    except paired_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
     return res

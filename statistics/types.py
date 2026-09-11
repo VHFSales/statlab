@@ -91,6 +91,45 @@ class EffectSizes:
 
 
 @dataclass
+class PairedTResult:
+    """Paired (dependent) samples t-test on the within-pair differences."""
+    method: str          # "Paired t-test"
+    condition1: str
+    condition2: str
+    n_pairs: int
+    mean_diff: float     # mean(cond1 - cond2)
+    sd_diff: float
+    se_diff: float
+    statistic: float     # t
+    df: float
+    p: float             # two-sided
+    ci_level: float
+    ci_low: float
+    ci_high: float
+    cohens_dz: float     # mean_diff / sd_diff
+    alpha: float
+    significant: bool
+
+
+@dataclass
+class WilcoxonResult:
+    """Wilcoxon signed-rank test for paired/dependent samples."""
+    method: str          # "Wilcoxon signed-rank"
+    condition1: str
+    condition2: str
+    n_pairs: int         # non-zero differences used
+    n_zeros: int         # dropped zero differences
+    w_statistic: float   # min(W+, W-)
+    w_plus: float
+    w_minus: float
+    z: float
+    p: float             # two-sided (normal approximation)
+    alpha: float
+    significant: bool
+    note: str = ""
+
+
+@dataclass
 class TTestResult:
     """Two independent-sample t-test (Student's or Welch's)."""
     method: str          # "Student's t-test" | "Welch's t-test"
