@@ -106,6 +106,18 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Wording is rank-based: "at least one group tends to present different values
   (ranks)" — never "means differ".
 
+## Linear regression (OLS): simple & multiple
+- Fits y = Xβ + e by ordinary least squares (intercept by default). Reports each
+  coefficient's estimate, SE, t = β/SE, two-sided p (df = n − p), and t confidence
+  interval; R² and adjusted R²; the global F test (model vs intercept-only); and the
+  residual standard error. For a simple regression, R² equals Pearson r² and the
+  global F equals the slope's t².
+- Assumes independent errors with constant variance, approximately normal. Regression
+  is not causation. Needs n > p; a singular/rank-deficient design (constant predictor
+  or exact collinearity) is refused with an explanation rather than emitting unstable
+  estimates. The normal equations are solved by Gauss-Jordan elimination with partial
+  pivoting (pure stdlib).
+
 ## Correlation: Pearson & Spearman
 - Measures the strength/direction of association between two quantitative variables
   on the same units. **Correlation is not causation** and is not a mean comparison.

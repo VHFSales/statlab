@@ -20,8 +20,9 @@ from typing import Dict, List, Optional
 
 from statistics import (anova, assumptions, cld, correlation as corr_mod,
                         descriptive, effect_sizes, games_howell, nonparametric,
-                        paired as paired_mod, repeated_measures as rm_mod, ttest,
-                        tukey, two_way_anova as two_way_mod, welch)
+                        paired as paired_mod, regression as reg_mod,
+                        repeated_measures as rm_mod, ttest, tukey,
+                        two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -936,4 +937,69 @@ def analyze_correlation(x: list, y: list, var_x: str = "X", var_y: str = "Y",
         res.interpretation["conclusion"] = (
             "Não há evidência estatística suficiente de associação. A ausência de "
             "significância não comprova ausência de associação.")
+    return res
+
+
+
+@dataclass
+class RegressionAnalysisResult:
+    analysis_id: str
+    created_at: str
+    program_version: str
+    core_version: str
+    python_version: str
+    alpha: float
+    response: str
+    predictors: list
+    result: Optional[dict]        # RegressionResult dict
+    interpretation: dict
+    warnings: list
+    refusals: list
+    method: str = "OLS linear regression"
+
+
+def analyze_regression(predictors: list, y: list, predictor_names: list = None,
+                       response_name: str = "y", ci_level: float = None,
+                       options: AnalysisOptions = None
+                       ) -> RegressionAnalysisResult:
+    """Ordinary least squares regression orchestration.
+
+    ``predictors`` is a list of columns (each aligned with ``y``). One column = a
+    simple regression; several = multiple regression.
+    """
+    options = options or AnalysisOptions()
+    ci = ci_level if ci_level is not None else options.ci_level
+    res = RegressionAnalysisResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=options.alpha,
+        response=response_name, predictors=list(predictor_names or []),
+        result=None, interpretation={}, warnings=[], refusals=[])
+
+    try:
+        rr = reg_mod.ols(predictors, y, predictor_names, response_name,
+                         intercept=True, ci_level=ci)
+    except reg_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
+        return res
+
+    res.predictors = rr.predictors
+    res.result = asdict(rr)
+    res.warnings.extend(rr.notes)
+    dec = options.decimals
+    res.interpretation["model"] = (
+        f"Regressão linear (MQO) de {rr.response} sobre "
+        f"{', '.join(rr.predictors)}: R² = {rr.r_squared:.{dec}f}, R² ajustado = "
+        f"{rr.adj_r_squared:.{dec}f}, F({rr.df_model}, {rr.df_resid}) = "
+        f"{rr.f_statistic:.{dec}f}, p "
+        + interpreter._p_rel(rr.f_p, interpreter.format_p(rr.f_p, dec)) + ".")
+    if rr.f_p < options.alpha:
+        res.interpretation["conclusion"] = (
+            "O modelo explica uma parcela estatisticamente significativa da "
+            "variação da resposta. Regressão não implica causalidade.")
+    else:
+        res.interpretation["conclusion"] = (
+            "O modelo não explica uma parcela estatisticamente significativa da "
+            "variação da resposta (ao nível α escolhido).")
     return res

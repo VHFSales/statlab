@@ -73,7 +73,8 @@ def main():
     section = st.sidebar.radio("Seção", [
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
         "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "PAREADO",
-        "MEDIDAS REPETIDAS", "CORRELAÇÃO", "LOTE", "RELATÓRIO", "EXPORTAR"])
+        "MEDIDAS REPETIDAS", "CORRELAÇÃO", "REGRESSÃO", "LOTE", "RELATÓRIO",
+        "EXPORTAR"])
 
     with st.sidebar.expander("Glossário (?)"):
         for k, v in HELP.items():
@@ -105,6 +106,8 @@ def main():
         _section_repeated_measures()
     elif section == "CORRELAÇÃO":
         _section_correlation()
+    elif section == "REGRESSÃO":
+        _section_regression()
     elif section == "LOTE":
         _section_batch(mode)
     elif section == "RELATÓRIO":
@@ -615,6 +618,88 @@ def _section_plots():
         st.pyplot(fig)
     except Exception as exc:
         st.error(str(exc))
+
+
+def _section_regression():
+    st.header("Regressão linear (MQO)")
+    st.markdown("Cole uma tabela onde a **última coluna é a resposta (y)** e as "
+                "**colunas anteriores são os preditores**. Uma coluna de preditor = "
+                "regressão simples; várias = regressão múltipla. Um intercepto é "
+                "incluído automaticamente.")
+    text = st.text_area("Colar dados (preditores..., resposta)", height=200,
+                        placeholder="x1\tx2\ty\n10\t2\t8.04\n8\t1\t6.95\n...")
+    ci = st.selectbox("Nível de IC dos coeficientes", [0.90, 0.95, 0.99], index=1)
+    alpha = st.number_input("α (regressão)", 0.0001, 0.5, 0.05, 0.01, key="reg_alpha")
+    if st.button("Ajustar regressão") and text.strip():
+        names, cols = _parse_regression_table(text)
+        if not cols or len(cols) < 2:
+            st.error("Forneça ao menos um preditor e uma coluna de resposta.")
+            return
+        *pred_cols, y_col = cols
+        pred_names = names[:-1]
+        y_name = names[-1]
+        from app.core.orchestrator import AnalysisOptions, analyze_regression
+        res = analyze_regression(pred_cols, y_col, pred_names, y_name, ci_level=ci,
+                                 options=AnalysisOptions(alpha=alpha))
+        st.session_state["reg_result"] = res
+
+    res = st.session_state.get("reg_result")
+    if not res:
+        return
+    if res.refusals:
+        for r in res.refusals:
+            st.error(r)
+        return
+    for w in res.warnings:
+        st.warning(w)
+    rr = res.result
+    st.subheader("RESULTADO")
+    st.markdown(res.interpretation.get("model", ""))
+    st.info(res.interpretation.get("conclusion", ""))
+    import pandas as pd
+    st.dataframe(pd.DataFrame([{
+        "Termo": c["name"], "Estimativa": c["estimate"], "EP": c["se"],
+        "t": c["t"], "p": c["p"], "IC inf": c["ci_low"], "IC sup": c["ci_high"]}
+        for c in rr["coefficients"]]))
+    st.caption(f"R² = {rr['r_squared']:.4f} · R² ajustado = "
+               f"{rr['adj_r_squared']:.4f} · erro padrão residual = "
+               f"{rr['sigma']:.4f} · df = ({rr['df_model']}, {rr['df_resid']}).")
+
+
+def _parse_regression_table(text: str):
+    """Parse a numeric table; returns (column_names, list-of-columns)."""
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return [], []
+
+    def split(line):
+        return [c.strip() for c in (line.split("\t") if "\t" in line
+                                    else line.split(","))]
+
+    first = split(lines[0])
+    try:
+        [float(x) for x in first]
+        header = [f"x{i+1}" for i in range(len(first) - 1)] + ["y"]
+        data_lines = lines
+    except ValueError:
+        header = first
+        data_lines = lines[1:]
+    ncol = len(header)
+    cols = [[] for _ in range(ncol)]
+    for line in data_lines:
+        parts = split(line)
+        if len(parts) < ncol:
+            continue
+        row = []
+        ok = True
+        for p in parts[:ncol]:
+            try:
+                row.append(float(p))
+            except ValueError:
+                row.append(None)
+        for i in range(ncol):
+            cols[i].append(row[i])
+    return header, cols
 
 
 def _section_correlation():

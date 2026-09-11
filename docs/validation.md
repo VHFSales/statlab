@@ -202,6 +202,16 @@ mismatched lengths refused, missing pairs dropped (never zeroed). Orchestration
 (`analyze_correlation`) reports r/t/df/p/CI and states "correlation is not
 causation".
 
+## 17g. Linear regression (OLS) (`tests/test_regression.py`)
+
+Simple regression on Anscombe I recovers the published fit: intercept ≈ 3.0, slope
+≈ 0.5, R² ≈ 0.6665, df = (1, 9). Two identities verified to machine precision:
+R² = Pearson r² and global F = slope t². Multiple regression on an exactly linear
+construction (y = 2 + 3x₁ − x₂) recovers (2, 3, −1) with R² = 1. CI brackets each
+estimate. Guards: constant predictor, exact collinearity, and n ≤ p refused
+(singular design); missing rows dropped (never zeroed). The normal equations are
+solved by Gauss-Jordan with partial pivoting (no numpy).
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -215,7 +225,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 204 (200 run + 4 oracle tests skipped when the
+- **Total automated tests:** 217 (213 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
