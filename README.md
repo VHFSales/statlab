@@ -1,0 +1,107 @@
+# StatLab
+
+**A general-purpose scientific statistical platform for the comparison of
+independent groups.** Domain-neutral: it works for engineering, chemistry, physics,
+materials, biology, biomedicine, pharmacology, microbiology, polymers,
+nanotechnology, environment, and any laboratory research. The statistical layer
+never assigns physical/chemical/biological meaning to variables — that belongs to
+the researcher.
+
+First specialization (v1), implemented to a publication-grade correctness bar:
+
+- Descriptive statistics
+- One-way ANOVA (classical) and **Welch's ANOVA**
+- **Tukey HSD** / **Tukey–Kramer** (unequal n) and **Games–Howell**
+- **Compact Letter Display (CLD)** via the Piepho insert-and-absorb algorithm
+- Assumption diagnostics (Levene, Brown–Forsythe, Shapiro–Wilk on residuals, Q–Q)
+- Effect sizes (η², ω², partial η²)
+- A decision engine that recommends the appropriate method and *refuses* invalid ones
+- Scientific plots, Excel/CSV/HTML export, and a full reproducibility audit trail
+
+## Design principle: correctness over convenience
+
+Priority order (non-negotiable): statistical validity → precision → reproducibility
+→ transparency → traceability → robustness → prevention of misuse → ease of use →
+performance → appearance. When producing a number conflicts with the analysis being
+inappropriate, StatLab **refuses with an explanation** instead of emitting a
+precise-looking but invalid result.
+
+## Architecture
+
+```
+statlab/
+  statistics/     # PURE STDLIB statistical core (no third-party deps)
+  data/           # model, validation, import, transform
+  plots/          # matplotlib scientific plots (guarded)
+  reports/        # interpreter text, Excel/CSV, HTML/PDF report
+  persistence/    # JSON project save/load, hashing, snapshots
+  app/core/       # orchestrator: end-to-end AnalysisResult + audit
+  app/ui/         # Streamlit interface (Quick + Advanced modes)
+  tests/          # unittest suite + reference values + oracle cross-checks
+  specs/          # requirements.md, design.md, tasks.md, critical_review.md
+  docs/           # methodology (ANOVA != Tukey != CLD)
+```
+
+The **statistical core depends only on the Python standard library.** This makes it
+transparent (every formula is explicit — see `specs/design.md`), auditable, portable
+to locked-down lab machines, and testable offline. The scientific stack
+(numpy/pandas/scipy/statsmodels/matplotlib/openpyxl/streamlit) is used only in the
+outer layers and, optionally, as a validation oracle.
+
+## Quick start
+
+```bash
+# Core + tests need no installation (stdlib only):
+python3 -m unittest discover -s tests
+
+# Full application (import/plots/export/UI):
+pip install -r requirements.txt
+streamlit run app/ui/streamlit_app.py
+```
+
+Programmatic use of the validated engine:
+
+```python
+from app.core.orchestrator import analyze_raw, AnalysisOptions
+from statistics.decision_engine import DesignSpec
+
+raw = {"Controle": [10.2, 10.8, 11.1, 10.6, 10.4],
+       "A": [13.5, 14.0, 13.8, 14.2, 13.9],
+       "B": [12.1, 11.8, 12.5, 12.0, 11.9]}
+
+result = analyze_raw(raw, DesignSpec(n_factors=1), AnalysisOptions(alpha=0.05))
+print(result.interpretation["omnibus"])
+print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c'}
+```
+
+## Validation status
+
+91 automated tests pass offline (unittest). The numerical foundation is validated
+against closed-form identities and published tables:
+
+- F-distribution survival matches the exact form `(1 + 2F/n)^(-n/2)` to ~1e-19.
+- Studentized-range critical values match Harter tables to ~1e-4.
+- Shapiro–Wilk W matches the SciPy reference (~0.906 on the test sample).
+- ANOVA SS decomposition, F=t² (k=2), summary=raw equivalence, Tukey–Kramer =
+  Tukey HSD (balanced), Games–Howell per-pair Welch–Satterthwaite df.
+- CLD: canonical `{A:a, B:ab, C:b}` case plus 400 random-matrix invariant checks
+  (significant pair ⇒ disjoint letters; non-significant pair ⇒ shared letter),
+  and >26-group letter symbols (a…z, aa, ab, …).
+
+`tests/test_oracle.py` additionally cross-checks the core against SciPy/statsmodels
+when those are installed (skipped with a notice otherwise).
+
+## Documentation
+
+- `specs/requirements.md` — functional & statistical requirements, data model, flows.
+- `specs/design.md` — normative formulas and algorithms (the transparency contract).
+- `specs/tasks.md` — incremental implementation plan.
+- `specs/critical_review.md` — the statistical review that shaped the design.
+- `docs/methodology.md` — what each test does, assumptions, when (not) to use it.
+
+## Not in v1 (architecture is prepared)
+
+Factorial/repeated-measures/mixed ANOVA, ANCOVA, MANOVA; t / paired-t / Welch-t;
+Kruskal–Wallis→Dunn, Mann–Whitney, Wilcoxon, Friedman; regression/correlation/GLM;
+batch cross-variable FDR (Holm/Benjamini–Hochberg, opt-in); multiuser server.
+Methods are added only when they can meet the same correctness bar.
