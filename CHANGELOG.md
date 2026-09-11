@@ -2,6 +2,21 @@
 
 All notable changes to StatLab are documented here.
 
+## [1.2.0] — 2026-09-11
+
+New methods since 1.1, each in its own reviewed PR with numeric validation:
+- **Linear regression (OLS):** simple and multiple, solved via Gauss-Jordan on the
+  normal equations (pure stdlib). Coefficient estimates/SE/t/p/CI, R² and adjusted
+  R², global F test, residual SE. Validated against Anscombe I; R² = Pearson r² and
+  global F = slope t². Singular/collinear/n≤p designs refused.
+- **Unbalanced factorial ANOVA** with Type I / II / III sums of squares, computed by
+  comparing nested OLS models (sum-to-zero coding for orthogonal Type III). Balanced
+  designs reproduce the balanced module exactly (all types coincide).
+- **Multiplicity corrections** extended: Šidák, Holm–Šidák, and Hochberg (added to
+  the existing Bonferroni/Holm/Benjamini–Hochberg).
+
+Test suite grew from 204 to 232 tests.
+
 ## [1.1.0] — 2026-09-11
 
 New methods since 1.0, each in its own reviewed PR with numeric validation:
