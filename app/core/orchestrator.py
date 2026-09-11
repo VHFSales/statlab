@@ -18,10 +18,10 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from statistics import (anova, assumptions, cld, descriptive, effect_sizes,
-                        games_howell, nonparametric, paired as paired_mod,
-                        repeated_measures as rm_mod, ttest, tukey,
-                        two_way_anova as two_way_mod, welch)
+from statistics import (anova, assumptions, cld, correlation as corr_mod,
+                        descriptive, effect_sizes, games_howell, nonparametric,
+                        paired as paired_mod, repeated_measures as rm_mod, ttest,
+                        tukey, two_way_anova as two_way_mod, welch)
 from statistics import __version__ as CORE_VERSION
 from statistics.decision_engine import DesignSpec as EngineDesign
 from statistics.decision_engine import Diagnostics, recommend
@@ -868,4 +868,72 @@ def analyze_repeated_measures(blocks: list, condition_labels: list,
     res.cld = asdict(cld_res)
     res.interpretation["posthoc"] = interpreter.posthoc_sentence(ph,
                                                                  options.decimals)
+    return res
+
+
+
+@dataclass
+class CorrelationAnalysisResult:
+    analysis_id: str
+    created_at: str
+    program_version: str
+    core_version: str
+    python_version: str
+    alpha: float
+    var_x: str
+    var_y: str
+    result: Optional[dict]        # CorrelationResult dict
+    interpretation: dict
+    warnings: list
+    refusals: list
+    method: str = "Correlation"
+
+
+def analyze_correlation(x: list, y: list, var_x: str = "X", var_y: str = "Y",
+                        method: str = "pearson", options: AnalysisOptions = None
+                        ) -> CorrelationAnalysisResult:
+    """Bivariate correlation. ``method`` in {"pearson", "spearman"}. Inputs must be
+    aligned pair-by-pair; pairs missing on either side are dropped (never zeroed)."""
+    options = options or AnalysisOptions()
+    alpha = options.alpha
+    res = CorrelationAnalysisResult(
+        analysis_id=uuid.uuid4().hex,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        program_version=PROGRAM_VERSION, core_version=CORE_VERSION,
+        python_version=platform.python_version(), alpha=alpha,
+        var_x=var_x, var_y=var_y, result=None, interpretation={},
+        warnings=[], refusals=[])
+
+    fn = corr_mod.spearman if method.lower() == "spearman" else corr_mod.pearson
+    try:
+        cr = fn(x, y, alpha=alpha, ci_level=options.ci_level)
+    except corr_mod.InsufficientDataError as exc:
+        res.refusals.append(str(exc))
+        return res
+
+    res.result = asdict(cr)
+    if cr.n_dropped:
+        res.warnings.append(
+            f"{cr.n_dropped} par(es) com valor ausente descartado(s) "
+            f"(nunca convertidos em zero).")
+    if cr.note:
+        res.warnings.append(cr.note)
+
+    dec = options.decimals
+    ci = ""
+    if cr.ci_low == cr.ci_low:  # not NaN
+        ci = (f", IC{int(cr.ci_level * 100)}% [{cr.ci_low:.{dec}f}, "
+              f"{cr.ci_high:.{dec}f}]")
+    res.interpretation["primary"] = (
+        f"Correlação de {cr.method}: r = {cr.r:.{dec}f} "
+        f"(t({int(cr.df)}) = {cr.statistic:.{dec}f}), p "
+        + interpreter._p_rel(cr.p, interpreter.format_p(cr.p, dec)) + ci + ".")
+    if cr.p < alpha:
+        res.interpretation["conclusion"] = (
+            "Há evidência estatística de associação entre as variáveis. "
+            "Correlação NÃO implica causalidade.")
+    else:
+        res.interpretation["conclusion"] = (
+            "Não há evidência estatística suficiente de associação. A ausência de "
+            "significância não comprova ausência de associação.")
     return res

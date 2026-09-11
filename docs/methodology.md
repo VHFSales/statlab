@@ -106,6 +106,14 @@ Supports more than 26 groups (a…z, aa, ab, …).
 - Wording is rank-based: "at least one group tends to present different values
   (ranks)" — never "means differ".
 
+## Correlation: Pearson & Spearman
+- Measures the strength/direction of association between two quantitative variables
+  on the same units. **Correlation is not causation** and is not a mean comparison.
+- **Pearson r** (linear); **Spearman ρ** (monotonic, computed on ranks). Significance
+  via t = r√(n−2)/√(1−r²), df = n−2. Confidence interval via the Fisher z-transform
+  (z = atanh r, SE = 1/√(n−3)); for Spearman the Fisher-z CI is an approximation
+  (flagged). Requires ≥ 3 complete pairs; zero-variance refused.
+
 ## Repeated measures (non-parametric): Friedman → Nemenyi
 - For 3+ related conditions measured on the same unit (complete block design).
   Friedman ranks WITHIN each block, so it is the repeated-measures analogue of

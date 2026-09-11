@@ -192,6 +192,16 @@ feeds the CLD (invariants hold, source="Nemenyi"). Orchestration
 on a non-significant omnibus, and uses rank-based conclusion wording. The decision
 engine routes repeated-measures 3+ to Friedman and refuses 2 conditions (→ paired).
 
+## 17f. Correlation: Pearson & Spearman (`tests/test_correlation.py`)
+
+Pearson matches the Anscombe dataset I reference exactly: r = 0.81642, df = 9,
+p = 0.00217; perfect ±1 cases; Fisher-z CI brackets r and excludes 0 there. Spearman
+gives ρ = 1 on a monotonic non-linear relation (y = x²) where Pearson r < 1; handles
+ties and flags its approximate CI. Guards: n < 3 refused, zero variance refused,
+mismatched lengths refused, missing pairs dropped (never zeroed). Orchestration
+(`analyze_correlation`) reports r/t/df/p/CI and states "correlation is not
+causation".
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -205,7 +215,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 193 (189 run + 4 oracle tests skipped when the
+- **Total automated tests:** 204 (200 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
