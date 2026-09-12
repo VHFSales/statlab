@@ -196,6 +196,28 @@ def _parse_summary(text: str):
     return out
 
 
+def _show_rows_table(rows):
+    """Render a raw table (header + body) safely, even with duplicate/empty
+    headers coming from a messy PDF/Word table."""
+    import pandas as pd
+    try:
+        if not rows:
+            st.info("Tabela vazia.")
+            return
+        if len(rows) > 1:
+            cols = _imp.dedup_headers(rows[0])
+            # pad/truncate body rows to the header width
+            width = len(cols)
+            body = [(r + [""] * (width - len(r)))[:width] for r in rows[1:]]
+            st.dataframe(pd.DataFrame(body, columns=cols))
+        else:
+            st.dataframe(pd.DataFrame(rows))
+    except Exception as exc:
+        st.warning(f"Não foi possível exibir a prévia formatada ({exc}). "
+                   "Mostrando o conteúdo bruto:")
+        st.write(rows)
+
+
 def _apply_raw(raw):
     """Store a freshly loaded raw dataset and reset dependent state."""
     st.session_state["raw"] = raw
@@ -211,7 +233,11 @@ def _preview_raw(raw):
     # build a display table padded to equal length
     maxlen = max((len(v) for v in raw.values()), default=0)
     table = {k: list(v) + [None] * (maxlen - len(v)) for k, v in raw.items()}
-    st.dataframe(pd.DataFrame(table))
+    try:
+        st.dataframe(pd.DataFrame(table))
+    except Exception as exc:
+        st.warning(f"Não foi possível exibir a prévia formatada ({exc}).")
+        st.write(table)
     if total > 0 and valid == 0:
         st.error("Todos os valores ficaram vazios (NULL). Provavelmente o separador "
                  "decimal ou o separador de colunas foi interpretado errado. "
@@ -314,9 +340,7 @@ def _section_data_document():
     tbl = scan.tables[choice]
 
     st.markdown("**Prévia da tabela selecionada:**")
-    pr = tbl.rows
-    st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
-                 else pd.DataFrame(pr))
+    _show_rows_table(tbl.rows)
     st.caption("Motivos da pontuação: " + "; ".join(tbl.reasons))
 
     tipo = st.radio("Interpretar a tabela como",
@@ -393,10 +417,7 @@ def _section_data():
                 st.error(f"Não foi possível ler o arquivo: {e}")
         if st.session_state.get("_preview_rows"):
             with st.expander("Ver tabela lida do arquivo (linhas cruas)"):
-                import pandas as pd
-                pr = st.session_state["_preview_rows"]
-                st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
-                             else pd.DataFrame(pr))
+                _show_rows_table(st.session_state["_preview_rows"])
         _experiment_selector()
 
         st.markdown("---")
@@ -458,10 +479,7 @@ def _section_data():
                 st.error(f"Não foi possível ler o arquivo: {e}")
         if st.session_state.get("_preview_rows"):
             with st.expander("Ver tabela lida do arquivo (linhas cruas)"):
-                import pandas as pd
-                pr = st.session_state["_preview_rows"]
-                st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
-                             else pd.DataFrame(pr))
+                _show_rows_table(st.session_state["_preview_rows"])
         _experiment_selector()
 
         st.markdown("---")

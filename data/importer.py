@@ -219,14 +219,43 @@ def detect_format(rows: List[List[str]]) -> str:
     return "wide"
 
 
+def dedup_headers(header: List[str]) -> List[str]:
+    """Return unique, non-empty column names.
+
+    Empty headers become "Coluna 1", "Coluna 2", ... ; duplicates get a numeric
+    suffix ("Grupo", "Grupo (2)", ...). This prevents column collisions that would
+    otherwise silently merge groups or crash the preview (pandas/pyarrow reject
+    duplicate column names).
+    """
+    out: List[str] = []
+    seen: Dict[str, int] = {}
+    for i, h in enumerate(header):
+        name = str(h).strip()
+        if name == "":
+            name = f"Coluna {i + 1}"
+        base = name
+        if base in seen:
+            seen[base] += 1
+            name = f"{base} ({seen[base]})"
+            # guard against the suffixed name also colliding
+            while name in seen:
+                seen[base] += 1
+                name = f"{base} ({seen[base]})"
+            seen[name] = 1
+        else:
+            seen[base] = 1
+        out.append(name)
+    return out
+
+
 def to_raw_wide(rows: List[List[str]], decimal: str = "auto"
                 ) -> Dict[str, List[Optional[float]]]:
-    header = rows[0]
-    data: Dict[str, List[Optional[float]]] = {h.strip(): [] for h in header}
+    header = dedup_headers(rows[0])
+    data: Dict[str, List[Optional[float]]] = {h: [] for h in header}
     for r in rows[1:]:
         for i, h in enumerate(header):
             cell = r[i] if i < len(r) else ""
-            data[h.strip()].append(parse_number(cell, decimal))
+            data[h].append(parse_number(cell, decimal))
     return data
 
 
@@ -475,6 +504,12 @@ def rows_to_summary(rows: List[List[str]], decimal: str = "auto"
         mean = parse_number(r[mi], decimal) if mi is not None and mi < len(r) else None
         if mean is None:
             continue
+        # avoid silently overwriting a duplicate group label
+        if label in summary:
+            k = 2
+            while f"{label} ({k})" in summary:
+                k += 1
+            label = f"{label} ({k})"
         entry: Dict[str, float] = {"mean": mean}
         sd = parse_number(r[si], decimal) if si is not None and si < len(r) else None
         if sd is not None:
