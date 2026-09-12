@@ -135,6 +135,34 @@ p("Na seção DADOS, escolha 'Documento (tese/dissertação: detectar tabelas)' 
   "as ordena pela probabilidade de serem dados estatísticos (percentual de "
   "afinidade). Você vê uma prévia de cada tabela, escolhe a desejada e o programa a "
   "interpreta como dados brutos ou resumidos para análise.")
+sp()
+h2("Interpretação inteligente de layout")
+p("Antes de importar, o StatLab analisa a ESTRUTURA da tabela detectada, usando "
+  "convenções comuns de trabalhos científicos, e classifica o tipo de tabela:")
+small("• BRUTA — uma coluna de rótulo (grupo/amostra) e colunas numéricas com as "
+      "observações; importada diretamente para ANOVA/Tukey. "
+      "• RESUMIDA — células no formato média ± desvio (ex.: '61,4 ±1,3'), típicas de "
+      "tabelas de resultados; cada coluna de medida vira uma comparação entre as "
+      "amostras. "
+      "• DESCRITIVA/TEXTO — tabela sem dados numéricos analisáveis (métodos, "
+      "definições); sinalizada como não-analisável em vez de gerar uma prévia vazia.")
+sp()
+p("O interpretador reconhece automaticamente:")
+small("• Cabeçalhos de VÁRIAS LINHAS: títulos abrangentes que cobrem sub-colunas "
+      "(ex.: 'Brilho antes' sobre '20', '60', '85') são fundidos em rótulos "
+      "completos como 'Brilho antes 20'. "
+      "• A coluna de RÓTULOS (nomes das amostras) é identificada mesmo quando não é "
+      "a primeira. "
+      "• Células média±DP são separadas nos seus componentes; se houver LETRAS de "
+      "agrupamento (a, b, c, incluindo as sobrescritas) do trabalho original, elas "
+      "são "
+      "preservadas e mostradas ao lado — permitindo comparar com o agrupamento que "
+      "o próprio StatLab calcula.")
+sp()
+small("Para uma tabela resumida, escolha a coluna de medida a analisar e informe o "
+      "n (número de repetições) do experimento — o n NUNCA é fabricado: sem ele, o "
+      "programa não inventa o tamanho amostral. Com o n correto, o StatLab "
+      "reproduz o pós-teste (as letras de Tukey) a partir de média, desvio e n.")
 small("Limitação importante e honesta: dados que aparecem apenas em GRÁFICOS não "
       "são extraídos. Estimar valores a partir dos pixels de um gráfico (barras, "
       "curvas, boxplots) é impreciso e cientificamente inseguro — o programa não "
