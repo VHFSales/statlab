@@ -21,17 +21,10 @@ from .types import RawGroup, TTestResult
 
 
 def _t_ppf(p: float, df: float) -> float:
-    """Quantile of Student's t via bisection on the two-sided tail relation."""
-    # find t such that P(T <= t) = p, using the two-sided helper by symmetry
-    from .distributions import t_cdf
-    lo, hi = -1e4, 1e4
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        if t_cdf(mid, df) < p:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+    """Quantile of Student's t (delegates to the canonical, robust implementation
+    in ``distributions.t_ppf``)."""
+    from .distributions import t_ppf as _canonical_t_ppf
+    return _canonical_t_ppf(p, df)
 
 
 def _moments(values: Sequence[float]):

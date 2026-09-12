@@ -30,14 +30,8 @@ def iqr_outliers(values: Sequence[float], k: float = 1.5) -> List[dict]:
 
 
 def _t_ppf(p: float, df: float) -> float:
-    lo, hi = -1e4, 1e4
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        if t_cdf(mid, df) < p:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+    from .distributions import t_ppf as _canonical_t_ppf
+    return _canonical_t_ppf(p, df)
 
 
 def grubbs_test(values: Sequence[float], alpha: float = 0.05) -> dict:

@@ -101,6 +101,38 @@ def t_sf(t: float, df: float) -> float:
     return 1.0 - t_cdf(t, df)
 
 
+def t_ppf(p: float, df: float) -> float:
+    """Quantile of Student's t: the value ``x`` with ``P(T <= x) = p``.
+
+    Robust bisection on the CDF. The bracket EXPANDS as needed (instead of a fixed
+    ±1e4), so extreme tails with tiny ``df`` are not silently truncated. Symmetric
+    about 0. Returns NaN for df <= 0 and ±inf for p at the boundary.
+    """
+    if df <= 0:
+        return math.nan
+    if p <= 0.0:
+        return float("-inf")
+    if p >= 1.0:
+        return float("inf")
+    if p == 0.5:
+        return 0.0
+    # Exploit symmetry: solve the upper tail (p' >= 0.5) for x >= 0, then mirror.
+    pp = p if p > 0.5 else 1.0 - p
+    hi = 1.0
+    # grow the bracket until it straddles the target (cap avoids infinite loop)
+    while t_cdf(hi, df) < pp and hi < 1e300:
+        hi *= 2.0
+    lo = 0.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if t_cdf(mid, df) < pp:
+            lo = mid
+        else:
+            hi = mid
+    x = 0.5 * (lo + hi)
+    return x if p > 0.5 else -x
+
+
 def t_two_sided_p(t: float, df: float) -> float:
     """Two-sided p-value P(|T| >= |t|)."""
     x = df / (df + t * t)

@@ -28,14 +28,8 @@ from .types import RegressionCoefficient, RegressionResult
 
 
 def _t_ppf(p: float, df: float) -> float:
-    lo, hi = -1e4, 1e4
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        if t_cdf(mid, df) < p:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+    from .distributions import t_ppf as _canonical_t_ppf
+    return _canonical_t_ppf(p, df)
 
 
 def _matmul_at_a(X: List[List[float]]) -> List[List[float]]:

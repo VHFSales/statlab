@@ -210,6 +210,16 @@ def recommend(design: DesignSpec, diag: Diagnostics, alpha: float = 0.05,
         else:
             reason.append("Tamanhos amostrais desiguais: Tukey-Kramer.")
         rec.reasons.extend(reason)
+        # Transparency: if NO homogeneity cue was available at all (no Levene/
+        # Brown-Forsythe p and no variance ratio), say so plainly — the classical
+        # ANOVA choice then rests on an UNVERIFIED equal-variance assumption.
+        if (math.isnan(diag.brown_forsythe_p) and math.isnan(diag.levene_p)
+                and math.isnan(diag.variance_ratio)):
+            rec.warnings.append(
+                "Nenhum diagnóstico de homogeneidade de variâncias estava "
+                "disponível; a ANOVA clássica foi escolhida assumindo variâncias "
+                "iguais SEM verificação. Se houver dúvida, prefira a ANOVA de Welch "
+                "(robusta a variâncias desiguais) no modo avançado.")
 
     # --- Post-hoc auto-run policy (Quick mode) --------------------------- #
     if omnibus_p is None:

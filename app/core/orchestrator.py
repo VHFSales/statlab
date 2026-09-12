@@ -237,10 +237,14 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
     # --- two-group case: run a t-test instead of ANOVA/post-hoc ---
     if rec.method in ("Student's t-test", "Welch's t-test"):
         g1, g2 = valid_groups[0], valid_groups[1]
-        if rec.method == "Welch's t-test":
-            tt = ttest.welch_t(g1, g2, alpha=alpha, ci_level=options.ci_level)
-        else:
-            tt = ttest.student_t(g1, g2, alpha=alpha, ci_level=options.ci_level)
+        try:
+            if rec.method == "Welch's t-test":
+                tt = ttest.welch_t(g1, g2, alpha=alpha, ci_level=options.ci_level)
+            else:
+                tt = ttest.student_t(g1, g2, alpha=alpha, ci_level=options.ci_level)
+        except anova.InsufficientDataError as exc:
+            result.refusals.append("A análise não foi executada: " + str(exc))
+            return result
         result.ttest = asdict(tt)
         result.interpretation["omnibus"] = (
             f"{tt.method}: t({_fmt_df(tt.df)}) = "
@@ -258,23 +262,31 @@ def analyze_raw(raw: Dict[str, list], design: EngineDesign,
                   "welch": "Welch's ANOVA"}.get(options.method_override, method)
 
     # --- omnibus ---
-    if method == "Welch's ANOVA":
-        wres = welch.welch_anova_raw(valid_groups)
-        result.omnibus = asdict(wres)
-        result.omnibus_kind = "welch"
-        omnibus_p = wres.p
-        eff = None
-        result.interpretation["omnibus"] = interpreter.apa_welch(wres, alpha,
-                                                                 options.decimals)
-    else:
-        table = anova.anova_oneway_raw(valid_groups)
-        eff = effect_sizes.effect_sizes_from_anova(table)
-        result.omnibus = asdict(table)
-        result.omnibus_kind = "anova"
-        result.effect_sizes = asdict(eff)
-        omnibus_p = table.p
-        result.interpretation["omnibus"] = interpreter.apa_anova(table, eff, alpha,
-                                                                 options.decimals)
+    # Degenerate data (e.g. every observation identical -> zero within-group
+    # variance) makes the F statistic undefined. Refuse cleanly instead of letting
+    # the InsufficientDataError propagate as an unhandled crash.
+    try:
+        if method == "Welch's ANOVA":
+            wres = welch.welch_anova_raw(valid_groups)
+            result.omnibus = asdict(wres)
+            result.omnibus_kind = "welch"
+            omnibus_p = wres.p
+            eff = None
+            result.interpretation["omnibus"] = interpreter.apa_welch(
+                wres, alpha, options.decimals)
+        else:
+            table = anova.anova_oneway_raw(valid_groups)
+            eff = effect_sizes.effect_sizes_from_anova(table)
+            result.omnibus = asdict(table)
+            result.omnibus_kind = "anova"
+            result.effect_sizes = asdict(eff)
+            omnibus_p = table.p
+            result.interpretation["omnibus"] = interpreter.apa_anova(
+                table, eff, alpha, options.decimals)
+    except anova.InsufficientDataError as exc:
+        result.refusals.append(
+            "A análise não foi executada: " + str(exc))
+        return result
 
     result.interpretation["conclusion"] = interpreter.omnibus_conclusion(omnibus_p,
                                                                           alpha)
@@ -433,19 +445,23 @@ def analyze_summary(summary: Dict[str, dict], design: EngineDesign,
         # equal-variance -> ANOVA summary (F=t^2); unequal -> Welch summary
         method = "one-way ANOVA" if method == "Student's t-test" else "Welch's ANOVA"
 
-    if method == "Welch's ANOVA":
-        wres = welch.welch_anova_summary(groups)
-        result.omnibus = asdict(wres); result.omnibus_kind = "welch"
-        omnibus_p = wres.p
-        result.interpretation["omnibus"] = interpreter.apa_welch(wres, alpha,
-                                                                 options.decimals)
-    else:
-        table = anova.anova_oneway_summary(groups)
-        eff = effect_sizes.effect_sizes_from_anova(table)
-        result.omnibus = asdict(table); result.omnibus_kind = "anova"
-        result.effect_sizes = asdict(eff); omnibus_p = table.p
-        result.interpretation["omnibus"] = interpreter.apa_anova(table, eff, alpha,
-                                                                 options.decimals)
+    try:
+        if method == "Welch's ANOVA":
+            wres = welch.welch_anova_summary(groups)
+            result.omnibus = asdict(wres); result.omnibus_kind = "welch"
+            omnibus_p = wres.p
+            result.interpretation["omnibus"] = interpreter.apa_welch(
+                wres, alpha, options.decimals)
+        else:
+            table = anova.anova_oneway_summary(groups)
+            eff = effect_sizes.effect_sizes_from_anova(table)
+            result.omnibus = asdict(table); result.omnibus_kind = "anova"
+            result.effect_sizes = asdict(eff); omnibus_p = table.p
+            result.interpretation["omnibus"] = interpreter.apa_anova(
+                table, eff, alpha, options.decimals)
+    except anova.InsufficientDataError as exc:
+        result.refusals.append("A análise não foi executada: " + str(exc))
+        return result
     result.interpretation["conclusion"] = interpreter.omnibus_conclusion(omnibus_p,
                                                                           alpha)
 
