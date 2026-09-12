@@ -21,8 +21,10 @@ First specialization (v1), implemented to a publication-grade correctness bar:
 - **Document scanning** (thesis/dissertation/article PDF or Word): detects every
   table, scores it by data-likelihood, and **interprets its layout** — classifies
   raw / summary / descriptive tables, merges multi-row headers, splits `mean ± SD`
-  cells, and preserves the original Tukey grouping letters (so you can compare them
-  with StatLab's own CLD)
+  cells, preserves the original Tukey grouping letters (so you can compare them with
+  StatLab's own CLD), understands the **factor × condition (before/after)** layout
+  (e.g. power × treated/untreated), and **discards intercalated *Variation (%)* rows**
+  (computed deltas are never loaded as data)
 - Scientific plots, Excel/CSV/HTML export, and a full reproducibility audit trail
 
 ## Design principle: correctness over convenience
@@ -87,7 +89,7 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-297 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+308 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
 the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
 job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
 numerical foundation is validated against closed-form identities and published
