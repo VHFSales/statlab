@@ -250,6 +250,39 @@ class TestGroupedBeforeAfter(unittest.TestCase):
         self.assertIsNotNone(r.omnibus)
 
 
+class TestSummaryMisloadedAsRaw(unittest.TestCase):
+    """A mean±sd sample×condition table (like Tabela 29) wrongly sent through the
+    RAW path must be detectable so the UI can steer the user to Documento mode."""
+
+    T29_XLSX = [
+        ["Amostra", "Antes 20", "Após 20"],
+        ["D2.A", "61,4 ±1,3b", "70,2 ±1,1a"],
+        ["D3.A", "52,7 ±1,1c", "60,3 ±1,4b"],
+        ["D4.A", "67,8 ±2,8a", "72,1 ±2,0a"],
+    ]
+
+    def test_cells_flagged_as_meansd(self):
+        has_meansd = any(tl.cell_looks_mean_sd(str(c))
+                         for r in self.T29_XLSX for c in r)
+        self.assertTrue(has_meansd)
+
+    def test_label_column_becomes_empty_group_in_raw(self):
+        from data import importer as imp
+        raw, used, _ = imp.rows_to_raw(self.T29_XLSX, None, "auto")
+        self.assertEqual(used, "wide")
+        # the text label column ('Amostra') has no numbers -> all-None group
+        self.assertIn("Amostra", raw)
+        self.assertTrue(all(x is None for x in raw["Amostra"]))
+
+    def test_interpreter_reads_it_correctly(self):
+        it = tl.interpret_table(self.T29_XLSX, default_n=5)
+        self.assertEqual(it.kind, "summary")
+        self.assertEqual(it.label_col, 0)
+        self.assertEqual(it.summary_by_column["Antes 20"]["D2.A"],
+                         {"mean": 61.4, "sd": 1.3, "n": 5})
+        self.assertEqual(it.grouping_letters["Antes 20"]["D3.A"], "c")
+
+
 class TestTransposedSummary(unittest.TestCase):
     def test_adhesive_measure_by_sample(self):
         it = tl.interpret_table(T2_ADHESIVE)
