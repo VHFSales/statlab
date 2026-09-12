@@ -129,6 +129,18 @@ p("Se o arquivo (bruto ou resumido) tiver uma coluna de EXPERIMENTO (ou Ensaio, 
   "automaticamente. Um seletor aparece para você escolher qual experimento analisar; "
   "cada um é tratado como um conjunto independente, com seus próprios grupos e sua "
   "própria análise (ANOVA/Tukey etc.).")
+h2("Documento inteiro (tese, dissertação, artigo)")
+p("Na seção DADOS, escolha 'Documento (tese/dissertação: detectar tabelas)' e envie "
+  "um PDF ou Word. O programa varre o documento inteiro, detecta TODAS as tabelas e "
+  "as ordena pela probabilidade de serem dados estatísticos (percentual de "
+  "afinidade). Você vê uma prévia de cada tabela, escolhe a desejada e o programa a "
+  "interpreta como dados brutos ou resumidos para análise.")
+small("Limitação importante e honesta: dados que aparecem apenas em GRÁFICOS não "
+      "são extraídos. Estimar valores a partir dos pixels de um gráfico (barras, "
+      "curvas, boxplots) é impreciso e cientificamente inseguro — o programa não "
+      "fabrica dados. Ele apenas avisa quantas figuras existem; para analisar, use a "
+      "tabela correspondente ou os dados brutos. A leitura de PDF/Word exige os "
+      "pacotes pdfplumber e python-docx.")
 sp()
 small("Células vazias nunca são convertidas em zero; valores ausentes são contados "
       "e descartados de forma explícita.")

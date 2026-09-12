@@ -249,6 +249,18 @@ from each). ``import_file_multi(kind="raw"|"summary")`` returns one dataset per
 experiment (keyed "(único)" when there is a single one). End-to-end: each split
 summary experiment is analysed independently (ANOVA). 13 tests.
 
+## 17k. Document scan — table detection (`tests/test_document_scan.py`)
+
+Every table in a PDF/Word document is extracted (pdfplumber per page + text-line
+fallback; python-docx tables) and scored for data-likelihood: a summary table
+(Grupo/Média/DP/n) scores ≥ 0.7, a fully numeric raw table ≥ 0.6, a text schedule
+< 0.3, and a 1-body-row table is heavily penalised. Detected tables are sorted by
+descending score. ``table_to_dataset`` converts the chosen table to a raw or summary
+dataset (auto-detected from the header). Graphs/figures are counted and flagged, NOT
+mined for numbers (estimating values from a chart is scientifically unsound). Missing
+readers raise a clear ``MissingReader``; unsupported extensions raise
+``UnsupportedFile``. 11 tests.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -262,7 +274,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 260 (256 run + 4 oracle tests skipped when the
+- **Total automated tests:** 271 (267 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
