@@ -163,6 +163,17 @@ small("Para uma tabela resumida, escolha a coluna de medida a analisar e informe
       "n (número de repetições) do experimento — o n NUNCA é fabricado: sem ele, o "
       "programa não inventa o tamanho amostral. Com o n correto, o StatLab "
       "reproduz o pós-teste (as letras de Tukey) a partir de média, desvio e n.")
+sp()
+p("O interpretador também entende o layout FATOR × CONDIÇÃO (antes/depois), comum "
+  "em tabelas de resultados de engenharia/materiais — por exemplo, uma coluna de "
+  "Potência (600/750/900 W) cruzada com uma coluna de Condição (Sem plasma / Com "
+  "plasma). Cada célula de medida vira um grupo '{fator · condição}' (ex.: '600 W · "
+  "Com plasma'), preservando o pareamento antes/depois.")
+small("Linhas de VARIAÇÃO (%) intercaladas (ou delta, redução, aumento) são "
+      "identificadas como valores DERIVADOS — cálculos, não observações — e NÃO são "
+      "carregadas como dados. Se as células tiverem só a média (sem desvio), os "
+      "valores entram apenas para referência e o programa avisa que, sem DP e sem n, "
+      "não é possível testar significância — nenhuma incerteza é fabricada.")
 small("Limitação importante e honesta: dados que aparecem apenas em GRÁFICOS não "
       "são extraídos. Estimar valores a partir dos pixels de um gráfico (barras, "
       "curvas, boxplots) é impreciso e cientificamente inseguro — o programa não "

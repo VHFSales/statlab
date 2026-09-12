@@ -350,26 +350,43 @@ def _section_data_document():
                     "raw": "Dados brutos (valores individuais)",
                     "descriptive": "Descritiva / texto (não é tabela de dados)"}
     st.markdown(f"**Tipo detectado:** {tipo_legivel.get(interp.kind, interp.kind)}")
+    layout_legivel = {
+        "grouped_before_after": "fator × condição (antes/depois) — ex.: "
+                                "Potência × Sem/Com tratamento",
+        "sample_by_condition": "amostra × condição (uma medida resumida por célula)",
+        "sample_by_condition_raw": "amostra × condição (um valor por célula)",
+        "wide_raw": "dados brutos (uma coluna por grupo)"}
+    if interp.layout in layout_legivel:
+        st.markdown(f"**Layout:** {layout_legivel[interp.layout]}")
+    if interp.dropped_derived_rows:
+        st.markdown(f"**Linhas derivadas descartadas:** "
+                    f"{interp.dropped_derived_rows} (variação/percentual — são "
+                    "cálculos, não observações)")
     for m in interp.messages:
         st.info(m)
 
     if interp.kind == "descriptive":
         return
 
-    if interp.kind == "summary":
+    # Whenever a per-column summary was built (summary tables, and the
+    # factor×condition layout even without sd), prefer it over the flat raw path.
+    if interp.summary_by_column:
         # sample x condition: pick the measurement column to compare samples
         cols = list(interp.summary_by_column.keys())
         if not cols:
             st.warning("Não foi possível montar estatísticas resumidas desta tabela.")
             return
-        col = st.selectbox("Coluna de medida (condição) a analisar — compara as "
-                           "amostras dentro dela", cols)
+        col = st.selectbox("Coluna de medida (condição) a analisar — compara os "
+                           "grupos dentro dela", cols)
+        base = interp.summary_by_column[col]
+        # Does every group carry a standard deviation? Without sd (and n) we cannot
+        # test significance and must NOT fabricate it.
+        all_have_sd = all("sd" in v for v in base.values())
         n_val = st.number_input("Tamanho amostral (n) por medição — não consta na "
                                 "tabela; informe o do experimento", 1, 10000, 3)
-        base = interp.summary_by_column[col]
         dataset = {k: dict(v, n=int(n_val)) for k, v in base.items()}
         st.markdown("**Estatísticas resumidas preparadas:**")
-        rows_prev = [{"Amostra": k, "Média": v.get("mean"), "DP": v.get("sd"),
+        rows_prev = [{"Grupo": k, "Média": v.get("mean"), "DP": v.get("sd"),
                       "n": int(n_val),
                       "Letra (trabalho)": interp.grouping_letters.get(col, {}).get(k, "")}
                      for k, v in base.items()]
@@ -381,15 +398,20 @@ def _section_data_document():
             st.caption("As letras da coluna 'Letra (trabalho)' são as do teste "
                        "post-hoc já realizado no trabalho original — use-as para "
                        "conferir com o resultado do StatLab.")
-        if st.button("Usar esta coluna para análise"):
+        if not all_have_sd:
+            st.warning("Esta coluna não tem desvio padrão em todas as células. Sem "
+                       "DP não é possível testar significância a partir de resumo — "
+                       "o StatLab não fabrica incerteza. Se você tiver os dados "
+                       "brutos (as repetições), carregue-os em 'Dados brutos'.")
+        elif st.button("Usar esta coluna para análise"):
             st.session_state["data_kind"] = "SUMMARY"
             _apply_summary(dataset)
             st.session_state["_experiments"] = None
-            st.success(f"Coluna '{col}' carregada ({len(dataset)} amostras). "
+            st.success(f"Coluna '{col}' carregada ({len(dataset)} grupos). "
                        "Vá para DELINEAMENTO e ANÁLISE.")
         return
 
-    # kind == "raw"
+    # kind == "raw" with a flat wide layout (no per-column summary)
     st.markdown("**Dados brutos preparados (uma coluna por grupo):**")
     _preview_raw(interp.raw)
     if st.button("Usar esta tabela para análise"):

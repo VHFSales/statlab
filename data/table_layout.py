@@ -57,13 +57,26 @@ def parse_mean_sd(cell: str, decimal: str = "auto") -> Optional[MeanSD]:
     for pm in _PM:
         pm_norm = pm_norm.replace(pm, "±")
 
-    # capture a trailing letter group (superscript or plain), e.g. "b", "ab", "ᵇ"
+    # capture a trailing grouping/CLD letter group (superscript, or LOWERCASE a-z).
+    # Tukey/CLD letters are lowercase (a, b, ab, ...); an uppercase trailing token
+    # is almost always a UNIT (e.g. "600 W", "15 mJ") and must NOT be read as a
+    # grouping letter. We also require the letter to sit tight against the number
+    # (optionally with a ± sd in between) rather than after a space+word.
     letter = ""
-    m_letter = re.search(r"([" + _SUPERSCRIPT + r"]+|[a-zA-Z]{1,3})\s*$", pm_norm)
-    # only treat as a letter if what precedes it is a number (avoid words)
+    m_letter = re.search(r"([" + _SUPERSCRIPT + r"]+|[a-z]{1,3})\s*$", pm_norm)
+    # only treat as a letter if what precedes it is a number AND the trailing token
+    # is not separated by whitespace from that number (units like " W" have a space)
     if m_letter and re.search(r"\d", pm_norm[:m_letter.start()]):
-        letter = m_letter.group(1)
-        core = pm_norm[:m_letter.start()].strip()
+        preceding = pm_norm[:m_letter.start()]
+        is_superscript = any(ch in _SUPERSCRIPT for ch in m_letter.group(1))
+        # a plain a-z letter counts as grouping only if glued to the number
+        # (no space): "61,4 ±1,3b" ok; "600 W" would have a space -> unit, reject.
+        glued = is_superscript or (preceding and preceding[-1:] not in (" ", "\t"))
+        if glued:
+            letter = m_letter.group(1)
+            core = preceding.strip()
+        else:
+            core = pm_norm
     else:
         core = pm_norm
 
@@ -95,6 +108,45 @@ def parse_mean_sd(cell: str, decimal: str = "auto") -> Optional[MeanSD]:
         table = {c: chr(ord('a') + i) for i, c in enumerate(_SUPERSCRIPT)}
         letter = "".join(table.get(ch, ch) for ch in letter).lower()
     return MeanSD(mean=mean, sd=sd, letter=letter)
+
+
+# --------------------------------------------------------------------------- #
+# derived / non-data rows (e.g. "Variação (%)", "Δ", "Redução %")
+# --------------------------------------------------------------------------- #
+# words that mark a row as a DERIVED quantity (a computed delta), not raw data.
+_DERIVED_HINTS = ("variacao", "variação", "delta", "reducao", "redução",
+                   "aumento", "diferenca", "diferença", "ganho", "change",
+                   "reduction", "increase", "difference")
+
+
+def _looks_percent_token(cell: str) -> bool:
+    """True if a cell is essentially a percentage value like '45,8%' or '53 %'."""
+    s = str(cell).strip()
+    return bool(re.match(r"^[-+]?[\d.,]+\s*%$", s))
+
+
+def row_is_derived(row: List[str]) -> bool:
+    """True if a row holds a DERIVED quantity (variation/delta) rather than data.
+
+    Recognized two ways: (a) a label cell whose text matches a derived-quantity
+    hint (Variação, Δ, Redução...), or (b) a row whose numeric cells are ALL
+    written as percentages (e.g. '45,8%'), which in before/after tables marks the
+    computed change line. Such rows must never be loaded as observations.
+    """
+    if not row:
+        return False
+    joined = " ".join(str(c) for c in row)
+    norm = _norm(joined)
+    if any(h in norm for h in (_norm(x) for x in _DERIVED_HINTS)):
+        return True
+    if "\u0394" in joined or "%" == joined.strip():
+        return True
+    # all non-empty numeric-looking cells are percentages -> a variation row
+    numeric_cells = [c for c in row if str(c).strip() != ""
+                     and parse_mean_sd(c) is not None]
+    if numeric_cells and all(_looks_percent_token(c) for c in numeric_cells):
+        return True
+    return False
 
 
 def cell_looks_mean_sd(cell: str) -> bool:
@@ -204,6 +256,90 @@ _LABEL_HINTS = {"amostra", "amostras", "grupo", "grupos", "tratamento",
                 "condicao", "material", "id", "codigo", "especime", "corpodeprova"}
 
 
+# condition-column hints: a column of "before/after"-style labels that pairs with
+# a spanning factor column (e.g. Potência 600/750/900 × Condição Sem/Com plasma).
+_CONDITION_HINTS = {"condicao", "condição", "condition", "estado", "status",
+                    "etapa", "fase", "tratamento", "treatment"}
+_BEFORE_AFTER_TOKENS = ("sem", "com", "antes", "apos", "após", "before", "after",
+                        "controle", "control", "pre", "pré", "pos", "pós",
+                        "tratado", "nao tratado", "não tratado", "untreated",
+                        "treated", "referencia", "referência", "reference")
+
+
+def _column_values(rows: List[List[str]], j: int, n_header: int) -> List[str]:
+    return [str(r[j]).strip() for r in rows[n_header:] if j < len(r)]
+
+
+def detect_grouped_before_after(rows: List[List[str]], n_header: int
+                                ) -> Optional[Tuple[int, int]]:
+    """Detect the 'factor × condition (before/after)' layout.
+
+    Returns ``(factor_col, condition_col)`` when the table has:
+      - a FACTOR column that labels blocks (e.g. Potência: 600 W / 750 W / 900 W,
+        often written once per block with blank cells under it), and
+      - a CONDITION column of before/after-style labels (Sem plasma / Com plasma,
+        Antes / Após, Controle / Tratado), whose values repeat across blocks.
+    Otherwise returns None. This is the layout in many materials/engineering
+    results tables, where each measurement cell is one paired observation.
+    """
+    if not rows:
+        return None
+    header = merge_header_rows(rows[:n_header])
+    body = [r for r in rows[n_header:] if not row_is_derived(r)]
+    if len(body) < 2:
+        return None
+
+    # find a condition column: header hint OR values dominated by before/after tokens
+    cond_col = None
+    for j in range(len(header)):
+        if _norm(header[j]) in _CONDITION_HINTS:
+            cond_col = j
+            break
+    if cond_col is None:
+        for j in range(min(len(header), 3)):  # condition is an early column
+            # values from body rows only, excluding derived (variation) rows
+            vals = [str(r[j]).strip() for r in body if j < len(r)
+                    and str(r[j]).strip() != ""]
+            if not vals:
+                continue
+            hits = sum(1 for v in vals
+                       if any(tok in _norm(v) for tok in
+                              (_norm(t) for t in _BEFORE_AFTER_TOKENS)))
+            if hits >= max(2, 0.6 * len(vals)):
+                cond_col = j
+                break
+    if cond_col is None:
+        return None
+
+    # find the factor column: a different early, mostly-non-numeric column whose
+    # values label blocks (may be sparse / forward-filled). Prefer a header hint.
+    factor_col = None
+    for j in range(len(header)):
+        if j == cond_col:
+            continue
+        h = _norm(header[j])
+        if h in {"potencia", "potência", "power", "fator", "factor", "nivel",
+                 "nível", "grupo", "tratamento", "condicao_experimental"}:
+            factor_col = j
+            break
+    if factor_col is None:
+        # fallback: the first non-condition column that is mostly non-mean±sd text
+        for j in range(min(len(header), 3)):
+            if j == cond_col:
+                continue
+            vals = [str(r[j]).strip() for r in body if j < len(r)]
+            nonempty = [v for v in vals if v != ""]
+            if not nonempty:
+                continue
+            numeric = sum(1 for v in nonempty if cell_looks_mean_sd(v))
+            if numeric == 0:  # labels/units like "600 W", "N/A" — not summary cells
+                factor_col = j
+                break
+    if factor_col is None or factor_col == cond_col:
+        return None
+    return (factor_col, cond_col)
+
+
 def detect_label_column(rows: List[List[str]], n_header: int) -> Optional[int]:
     """Find the column of row labels (Amostra/Grupo): a column whose header matches
     a known hint, or (fallback) the first column if it is mostly non-numeric while
@@ -250,6 +386,10 @@ class InterpretedTable:
     raw: Dict[str, List[Optional[float]]] = field(default_factory=dict)
     messages: List[str] = field(default_factory=list)
     measurement_columns: List[str] = field(default_factory=list)
+    # layout tag: "sample_by_condition" | "grouped_before_after" | "wide_raw" | ...
+    layout: str = ""
+    # rows recognized as DERIVED (variation/delta) and deliberately NOT loaded
+    dropped_derived_rows: int = 0
 
 
 def _cell_kind_stats(body: List[List[str]], label_col: Optional[int]):
@@ -292,6 +432,105 @@ def classify_table(rows: List[List[str]]) -> str:
     return "raw"
 
 
+def _interpret_grouped_before_after(
+        result: "InterpretedTable", data_rows: List[List[str]],
+        labels: List[str], grouped: Tuple[int, int],
+        default_n: Optional[int]) -> bool:
+    """Fill ``result`` for the factor × condition (before/after) layout.
+
+    Each measurement column becomes a summary comparing every {factor · condition}
+    cell (e.g. '600 W · Sem plasma', '600 W · Com plasma', '750 W · Sem plasma'...).
+    The factor label is forward-filled across its block (it is often written once,
+    with blank cells beneath). Returns True on success, False if nothing usable was
+    built (so the caller can fall back to the generic handler).
+    """
+    factor_col, cond_col = grouped
+    meas_cols = [j for j in range(len(labels))
+                 if j not in (factor_col, cond_col)]
+    if not meas_cols:
+        return False
+    result.measurement_columns = [labels[j] for j in meas_cols]
+    result.layout = "grouped_before_after"
+
+    built_any = False
+
+    # Assign a factor label to every data row. The factor (e.g. '600 W') is written
+    # once per BLOCK but may sit on any row of that block (top, middle, ...), with
+    # 'N/A'/blank on the block's other rows. So we segment rows into blocks and give
+    # each block the single real factor value found anywhere inside it. A new block
+    # starts when the condition value repeats (e.g. a second 'Sem plasma').
+    def _is_placeholder(v: str) -> bool:
+        return _norm(v) in {"", "na", "n/a", "-", "--"}
+
+    factor_per_row: List[str] = [""] * len(data_rows)
+    block_start = 0
+    seen_conds: set = set()
+    blocks: List[Tuple[int, int]] = []
+    for ri, r in enumerate(data_rows):
+        cond = _norm(str(r[cond_col]).strip()) if cond_col < len(r) else ""
+        if cond and cond in seen_conds:
+            blocks.append((block_start, ri))
+            block_start = ri
+            seen_conds = set()
+        if cond:
+            seen_conds.add(cond)
+    blocks.append((block_start, len(data_rows)))
+    for (a, b) in blocks:
+        block_factor = ""
+        for ri in range(a, b):
+            r = data_rows[ri]
+            fac = str(r[factor_col]).strip() if factor_col < len(r) else ""
+            if not _is_placeholder(fac):
+                block_factor = fac
+                break
+        for ri in range(a, b):
+            factor_per_row[ri] = block_factor
+
+    for j in meas_cols:
+        col_label = labels[j]
+        summ: Dict[str, Dict[str, float]] = {}
+        for ri, r in enumerate(data_rows):
+            cond = str(r[cond_col]).strip() if cond_col < len(r) else ""
+            fac = factor_per_row[ri]
+            ms = parse_mean_sd(r[j]) if j < len(r) else None
+            if ms is None:
+                continue
+            key = " · ".join([p for p in (fac, cond) if p]) or f"linha {ri+1}"
+            entry: Dict[str, float] = {"mean": ms.mean}
+            if ms.sd is not None:
+                entry["sd"] = ms.sd
+            if default_n is not None:
+                entry["n"] = int(default_n)
+            if key in summ:
+                k = 2
+                while f"{key} ({k})" in summ:
+                    k += 1
+                key = f"{key} ({k})"
+            summ[key] = entry
+        if summ:
+            result.summary_by_column[col_label] = summ
+            built_any = True
+
+    if not built_any:
+        return False
+
+    msg = ("Tabela no formato fator × condição (antes/depois) — ex.: '"
+           + labels[factor_col] + "' × '" + labels[cond_col] + "'. Cada célula é "
+           "uma observação pareada; as colunas de medida ("
+           + ", ".join(result.measurement_columns) + ") foram carregadas como "
+           "grupos '{fator · condição}'.")
+    if default_n is None:
+        msg += (" Informe o tamanho amostral (n) — não consta na tabela — para "
+                "habilitar os testes.")
+    result.messages.append(msg)
+    if result.dropped_derived_rows:
+        result.messages.append(
+            f"{result.dropped_derived_rows} linha(s) de variação/percentual foram "
+            "identificadas como valores derivados e NÃO carregadas como dados "
+            "(elas são cálculos, não observações).")
+    return True
+
+
 def interpret_table(rows: List[List[str]], decimal: str = "auto",
                     default_n: Optional[int] = None) -> InterpretedTable:
     """Interpret a scanned table: detect header/label layout, classify the type,
@@ -312,16 +551,38 @@ def interpret_table(rows: List[List[str]], decimal: str = "auto",
             "de dados numéricos. Selecione outra tabela do documento.")
         return result
 
-    meas_cols = [j for j in range(len(labels)) if j != label_col]
-    result.measurement_columns = [labels[j] for j in meas_cols]
+    # count and drop DERIVED rows (variation/delta) up front — they are never data
+    result.dropped_derived_rows = sum(1 for r in body if row_is_derived(r))
+    data_rows = [r for r in body if not row_is_derived(r)]
+
+    # The 'factor × condition (before/after)' layout applies whether or not the
+    # cells carry a ± sd (materials tables often report a bare mean). Try it first
+    # for BOTH summary and raw kinds, so 'Potência' is never mistaken for a measure.
+    grouped = detect_grouped_before_after(rows, n_header)
+    if grouped is not None:
+        if _interpret_grouped_before_after(
+                result, data_rows, labels, grouped, default_n):
+            # if none of the loaded cells carried a sd, tell the user plainly
+            has_sd = any("sd" in e for col in result.summary_by_column.values()
+                         for e in col.values())
+            if not has_sd:
+                result.messages.append(
+                    "Atenção: esta tabela traz apenas valores pontuais (sem desvio "
+                    "padrão). Sem DP e sem n não é possível testar significância — "
+                    "o StatLab não fabrica incerteza. Os valores foram carregados "
+                    "apenas para referência/visualização.")
+            return result
 
     if kind == "summary":
         # sample x condition layout: one summary per measurement column
+        meas_cols = [j for j in range(len(labels)) if j != label_col]
+        result.measurement_columns = [labels[j] for j in meas_cols]
+        result.layout = "sample_by_condition"
         for j in meas_cols:
             col_label = labels[j]
             summ: Dict[str, Dict[str, float]] = {}
             letters: Dict[str, str] = {}
-            for ri, r in enumerate(body):
+            for ri, r in enumerate(data_rows):
                 sample = (str(r[label_col]).strip() if label_col is not None
                           and label_col < len(r) else f"linha {ri+1}")
                 if sample == "":
@@ -354,19 +615,28 @@ def interpret_table(rows: List[List[str]], decimal: str = "auto",
             msg += (" Informe o tamanho amostral (n) — não consta na tabela — para "
                     "habilitar ANOVA/Tukey.")
         result.messages.append(msg)
+        if result.dropped_derived_rows:
+            result.messages.append(
+                f"{result.dropped_derived_rows} linha(s) de variação/percentual "
+                "foram identificadas como valores derivados e NÃO carregadas como "
+                "dados.")
         if result.grouping_letters:
             result.messages.append(
                 "Letras de agrupamento (ex.: teste de Tukey já realizado no trabalho "
                 "original) foram detectadas e preservadas para conferência.")
         return result
 
+    meas_cols = [j for j in range(len(labels)) if j != label_col]
+    result.measurement_columns = [labels[j] for j in meas_cols]
+
     # kind == "raw": build {column_label: [values]} treating each measurement
     # column as a group. If there is a label column, values come from that column's
     # rows; otherwise the whole table is wide raw.
     if label_col is None:
         # wide: each column is a group
+        result.layout = "wide_raw"
         raw: Dict[str, List[Optional[float]]] = {labels[j]: [] for j in meas_cols}
-        for r in body:
+        for r in data_rows:
             for j in meas_cols:
                 ms = parse_mean_sd(r[j]) if j < len(r) else None
                 raw[labels[j]].append(ms.mean if ms else None)
@@ -376,10 +646,11 @@ def interpret_table(rows: List[List[str]], decimal: str = "auto",
         # sample x condition of plain numbers -> each column is a comparison of
         # samples with a single value each (rarely enough for analysis); expose it
         # like the summary layout but as raw single values per sample.
+        result.layout = "sample_by_condition_raw"
         raw = {}
         for j in meas_cols:
             col_vals = []
-            for r in body:
+            for r in data_rows:
                 ms = parse_mean_sd(r[j]) if j < len(r) else None
                 col_vals.append(ms.mean if ms else None)
             raw[labels[j]] = col_vals
@@ -387,4 +658,8 @@ def interpret_table(rows: List[List[str]], decimal: str = "auto",
         result.messages.append(
             "Tabela numérica no formato amostra × condição (um valor por célula). "
             "Cada coluna vira um grupo com um valor por amostra.")
+    if result.dropped_derived_rows:
+        result.messages.append(
+            f"{result.dropped_derived_rows} linha(s) de variação/percentual foram "
+            "identificadas como valores derivados e NÃO carregadas como dados.")
     return result

@@ -275,7 +275,17 @@ measurement columns, per-column mean/SD summaries and the original grouping lett
 The grouping letters extracted from the source are preserved so the user can compare
 them with the CLD that StatLab computes itself; ``n`` is never fabricated (only used
 when supplied or present as a column). A regression test reproduces the Tukey letters
-of a real published table (brilho/gloss results) from mean, SD and n. 20 tests.
+of a real published table (brilho/gloss results) from mean, SD and n.
+
+The interpreter also recognises the **factor × condition (before/after)** layout
+common in materials/engineering results tables (e.g. *Potência* 600/750/900 W ×
+*Condição* Sem/Com plasma), where the factor label may sit on any row of its block
+and each measurement cell is one paired observation. ``row_is_derived`` identifies
+and **discards** intercalated *Variação (%)* / Δ / percentage rows — these are
+computed deltas, never loaded as data. Cells without a ± SD are loaded as bare means
+with an explicit warning that significance cannot be tested without SD and n (no
+uncertainty is fabricated). An end-to-end test loads a real contact-angle table and
+runs a Welch ANOVA over the six factor·condition groups. 31 tests.
 
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
@@ -290,7 +300,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 297 (293 run + 4 oracle tests skipped when the
+- **Total automated tests:** 308 (304 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
