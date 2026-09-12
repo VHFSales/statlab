@@ -343,31 +343,61 @@ def _section_data_document():
     _show_rows_table(tbl.rows)
     st.caption("Motivos da pontuação: " + "; ".join(tbl.reasons))
 
-    tipo = st.radio("Interpretar a tabela como",
-                    ["Detectar automaticamente", "Dados brutos",
-                     "Estatísticas resumidas (Média, DP, n)"], horizontal=True)
-    kind_arg = {"Detectar automaticamente": "auto", "Dados brutos": "raw",
-                "Estatísticas resumidas (Média, DP, n)": "summary"}[tipo]
-    if st.button("Usar esta tabela para análise"):
+    # --- interpretação inteligente do layout ---
+    from data import table_layout as tl
+    interp = tl.interpret_table(tbl.rows)
+    tipo_legivel = {"summary": "Estatísticas resumidas (média ± DP)",
+                    "raw": "Dados brutos (valores individuais)",
+                    "descriptive": "Descritiva / texto (não é tabela de dados)"}
+    st.markdown(f"**Tipo detectado:** {tipo_legivel.get(interp.kind, interp.kind)}")
+    for m in interp.messages:
+        st.info(m)
+
+    if interp.kind == "descriptive":
+        return
+
+    if interp.kind == "summary":
+        # sample x condition: pick the measurement column to compare samples
+        cols = list(interp.summary_by_column.keys())
+        if not cols:
+            st.warning("Não foi possível montar estatísticas resumidas desta tabela.")
+            return
+        col = st.selectbox("Coluna de medida (condição) a analisar — compara as "
+                           "amostras dentro dela", cols)
+        n_val = st.number_input("Tamanho amostral (n) por medição — não consta na "
+                                "tabela; informe o do experimento", 1, 10000, 3)
+        base = interp.summary_by_column[col]
+        dataset = {k: dict(v, n=int(n_val)) for k, v in base.items()}
+        st.markdown("**Estatísticas resumidas preparadas:**")
+        rows_prev = [{"Amostra": k, "Média": v.get("mean"), "DP": v.get("sd"),
+                      "n": int(n_val),
+                      "Letra (trabalho)": interp.grouping_letters.get(col, {}).get(k, "")}
+                     for k, v in base.items()]
         try:
-            used, dataset = ds.table_to_dataset(tbl, kind=kind_arg)
-            if used == "summary":
-                st.session_state["data_kind"] = "SUMMARY"
-                _apply_summary(dataset)
-            else:
-                st.session_state["data_kind"] = "RAW"
-                _apply_raw(dataset)
+            st.dataframe(pd.DataFrame(rows_prev))
+        except Exception:
+            st.write(rows_prev)
+        if interp.grouping_letters.get(col):
+            st.caption("As letras da coluna 'Letra (trabalho)' são as do teste "
+                       "post-hoc já realizado no trabalho original — use-as para "
+                       "conferir com o resultado do StatLab.")
+        if st.button("Usar esta coluna para análise"):
+            st.session_state["data_kind"] = "SUMMARY"
+            _apply_summary(dataset)
             st.session_state["_experiments"] = None
-            st.success(f"Tabela carregada como '{used}'. Grupos: "
-                       f"{', '.join(dataset.keys())}. Vá para DELINEAMENTO e ANÁLISE.")
-            if used == "raw":
-                _preview_raw(dataset)
-            else:
-                st.dataframe(pd.DataFrame(
-                    [{"Grupo": k, "Média": s.get("mean"), "DP": s.get("sd"),
-                      "n": s.get("n")} for k, s in dataset.items()]))
-        except Exception as e:
-            st.error(f"Não foi possível interpretar a tabela: {e}")
+            st.success(f"Coluna '{col}' carregada ({len(dataset)} amostras). "
+                       "Vá para DELINEAMENTO e ANÁLISE.")
+        return
+
+    # kind == "raw"
+    st.markdown("**Dados brutos preparados (uma coluna por grupo):**")
+    _preview_raw(interp.raw)
+    if st.button("Usar esta tabela para análise"):
+        st.session_state["data_kind"] = "RAW"
+        _apply_raw(interp.raw)
+        st.session_state["_experiments"] = None
+        st.success(f"Tabela carregada. Grupos: {', '.join(interp.raw.keys())}. "
+                   "Vá para DELINEAMENTO e ANÁLISE.")
 
 
 def _section_data():

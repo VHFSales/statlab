@@ -18,6 +18,11 @@ First specialization (v1), implemented to a publication-grade correctness bar:
 - Assumption diagnostics (Levene, Brown–Forsythe, Shapiro–Wilk on residuals, Q–Q)
 - Effect sizes (η², ω², partial η²)
 - A decision engine that recommends the appropriate method and *refuses* invalid ones
+- **Document scanning** (thesis/dissertation/article PDF or Word): detects every
+  table, scores it by data-likelihood, and **interprets its layout** — classifies
+  raw / summary / descriptive tables, merges multi-row headers, splits `mean ± SD`
+  cells, and preserves the original Tukey grouping letters (so you can compare them
+  with StatLab's own CLD)
 - Scientific plots, Excel/CSV/HTML export, and a full reproducibility audit trail
 
 ## Design principle: correctness over convenience
@@ -82,7 +87,7 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-271 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+297 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
 the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
 job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
 numerical foundation is validated against closed-form identities and published

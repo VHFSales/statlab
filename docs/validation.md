@@ -261,6 +261,22 @@ mined for numbers (estimating values from a chart is scientifically unsound). Mi
 readers raise a clear ``MissingReader``; unsupported extensions raise
 ``UnsupportedFile``. 11 tests.
 
+## 17l. Table layout intelligence (`tests/test_table_layout.py`)
+
+After a table is detected, ``data/table_layout.py`` interprets its STRUCTURE using
+common conventions of scientific tables. ``parse_mean_sd`` splits a cell such as
+``61,4 ±1,3ᵇ`` into mean, SD and a Tukey grouping letter (superscript ᵃᵇᶜ are
+normalised to a,b,c). ``detect_header_rows``/``merge_header_rows`` recognise
+multi-row headers and forward-fill spanning titles (``Brilho antes`` over ``20`` →
+``Brilho antes 20``). ``detect_label_column`` finds the sample-name column even when
+it is not first. ``classify_table`` labels the table *summary*, *raw* or
+*descriptive* (text), and ``interpret_table`` returns an ``InterpretedTable`` with the
+measurement columns, per-column mean/SD summaries and the original grouping letters.
+The grouping letters extracted from the source are preserved so the user can compare
+them with the CLD that StatLab computes itself; ``n`` is never fabricated (only used
+when supplied or present as a column). A regression test reproduces the Tukey letters
+of a real published table (brilho/gloss results) from mean, SD and n. 20 tests.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -274,7 +290,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 271 (267 run + 4 oracle tests skipped when the
+- **Total automated tests:** 297 (293 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,
