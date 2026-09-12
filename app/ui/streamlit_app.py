@@ -74,9 +74,12 @@ def main():
     st.title("StatLab — Plataforma de Análise Estatística Científica")
     st.caption("Comparação de grupos independentes: ANOVA · Welch · Tukey · "
                "Tukey-Kramer · Games-Howell · CLD")
+    st.caption("👋 Novo por aqui? Abra a seção **MANUAL / AJUDA** no menu à esquerda "
+               "— tem um passo a passo em linguagem simples para cada função.")
 
     mode = st.sidebar.radio("Modo", ["Rápido", "Avançado"])
     section = st.sidebar.radio("Seção", [
+        "MANUAL / AJUDA",
         "PROJETO", "DADOS", "DELINEAMENTO", "DESCRITIVA", "PRESSUPOSTOS",
         "ANÁLISE", "PÓS-TESTES", "OUTLIERS", "GRÁFICOS", "FATORIAL", "PAREADO",
         "MEDIDAS REPETIDAS", "CORRELAÇÃO", "REGRESSÃO", "LOTE", "RELATÓRIO",
@@ -86,7 +89,10 @@ def main():
         for k, v in HELP.items():
             st.markdown(f"**{k}** — {v}")
 
-    if section == "PROJETO":
+    if section == "MANUAL / AJUDA":
+        from app.ui import manual
+        manual.render(st)
+    elif section == "PROJETO":
         _section_project()
     elif section == "DADOS":
         _section_data()
