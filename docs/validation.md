@@ -287,6 +287,23 @@ with an explicit warning that significance cannot be tested without SD and n (no
 uncertainty is fabricated). An end-to-end test loads a real contact-angle table and
 runs a Welch ANOVA over the six factor·condition groups. 31 tests.
 
+## 17m. Full-program robustness audit (`tests/test_audit_robustness.py`)
+
+A whole-program audit (numerical core + data entry + orchestration) pinned three
+robustness fixes as regression tests. (1) A summary table missing SD (e.g. a
+point-value energy table) now yields a clean refusal with an explicit ``NO_SD``
+error instead of crashing with ``KeyError('sd')``. (2) Degenerate zero-variance data
+(all observations identical) is refused cleanly on every omnibus path (raw ANOVA/
+Welch, two-group t-test, summary ANOVA/Welch) rather than raising an unhandled
+``InsufficientDataError``. (3) The Student-t quantile was consolidated into a single
+canonical ``distributions.t_ppf`` with an adaptive bracket (the five per-module
+copies now delegate to it); it is accurate to <1e-3 against tables, symmetric, and no
+longer truncates extreme tails at the old fixed ±1e4 bound. The audit also confirmed,
+by exhaustive proof over all significance matrices for k<=5, that the CLD never
+violates its invariants, and double-checked the Welch ANOVA and Games-Howell results
+against an independent hand computation on the real thesis data. 11 tests. See
+``docs/auditoria_completa.md`` for the full report and per-analysis method rationale.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -300,7 +317,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 311 (307 run + 4 oracle tests skipped when the
+- **Total automated tests:** 322 (318 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

@@ -60,15 +60,8 @@ def _aligned_pairs(x1: Sequence[float], x2: Sequence[float]
 
 
 def _t_ppf(p: float, df: float) -> float:
-    from .distributions import t_cdf
-    lo, hi = -1e4, 1e4
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        if t_cdf(mid, df) < p:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+    from .distributions import t_ppf as _canonical_t_ppf
+    return _canonical_t_ppf(p, df)
 
 
 def paired_t_test(x1: Sequence[float], x2: Sequence[float],

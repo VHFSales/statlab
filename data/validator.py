@@ -109,7 +109,13 @@ def validate_summary(summary: Dict[str, Dict]) -> List[Issue]:
             except (TypeError, ValueError):
                 issues.append(Issue("ERROR", "BAD_N",
                                     f"Grupo '{lab}': n inválido.", lab))
-        if sd is not None and sd < 0:
+        if sd is None:
+            issues.append(Issue("ERROR", "NO_SD",
+                                f"Grupo '{lab}': desvio padrão (DP) ausente. Sem o DP "
+                                "não é possível realizar ANOVA/teste t a partir de "
+                                "estatísticas resumidas. Informe o DP de cada grupo "
+                                "ou forneça os dados brutos.", lab))
+        elif sd < 0:
             issues.append(Issue("ERROR", "NEG_SD",
                                 f"Grupo '{lab}': desvio padrão negativo.", lab))
     return issues
