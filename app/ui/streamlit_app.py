@@ -59,6 +59,9 @@ def _init_state():
     st.session_state.setdefault("result", None)
     st.session_state.setdefault("batch", None)       # {var: raw_dict}
     st.session_state.setdefault("batch_out", None)
+    st.session_state.setdefault("_experiments", None)      # multi-experiment bundle
+    st.session_state.setdefault("_selected_experiment", None)
+    st.session_state.setdefault("_preview_rows", None)
     st.session_state.setdefault("project", {"Nome": "", "Pesquisador": "",
                                             "Laboratório": "", "Descrição": ""})
 
@@ -218,6 +221,49 @@ def _preview_raw(raw):
                 "ausentes (não viram zero).")
 
 
+def _apply_summary(summ):
+    """Store a freshly loaded summary dataset and reset dependent state."""
+    st.session_state["summary"] = summ
+    st.session_state["raw"] = None
+    st.session_state["result"] = None
+
+
+def _apply_selected_experiment():
+    """Apply the dataset of the currently selected experiment (if a multi-file was
+    loaded) to the active raw/summary state."""
+    bundle = st.session_state.get("_experiments")
+    if not bundle:
+        return
+    name = st.session_state.get("_selected_experiment")
+    experiments = bundle["experiments"]
+    if name not in experiments:
+        name = next(iter(experiments))
+    dataset = experiments[name]
+    if bundle["kind"] == "summary":
+        _apply_summary(dataset)
+    else:
+        _apply_raw(dataset)
+
+
+def _experiment_selector():
+    """Render the experiment picker when a file with several experiments is loaded.
+    Returns True if a multi-experiment bundle is active."""
+    bundle = st.session_state.get("_experiments")
+    if not bundle or not bundle.get("multi"):
+        return False
+    names = list(bundle["experiments"].keys())
+    st.info(f"O arquivo contém {len(names)} experimentos distintos. Cada um é "
+            "analisado separadamente. Escolha qual analisar agora:")
+    sel = st.selectbox("Experimento", names,
+                       index=names.index(st.session_state.get(
+                           "_selected_experiment", names[0]))
+                       if st.session_state.get("_selected_experiment") in names
+                       else 0)
+    st.session_state["_selected_experiment"] = sel
+    _apply_selected_experiment()
+    return True
+
+
 def _section_data():
     st.header("Dados")
     kind = st.radio("Tipo de dados", ["Dados brutos (recomendado)",
@@ -233,19 +279,25 @@ def _section_data():
 
         # --- Opção 1: enviar arquivo ---
         st.markdown("**Opção 1 — Enviar um arquivo** (Excel, CSV, PDF ou Word). "
-                    "O programa lê a tabela automaticamente.")
-        up = st.file_uploader("Arquivo de dados",
+                    "O programa lê a tabela automaticamente. Se o arquivo tiver uma "
+                    "coluna de **Experimento/Ensaio** com vários valores, os "
+                    "experimentos são separados e você escolhe qual analisar.")
+        up = st.file_uploader("Arquivo de dados brutos",
                               type=["xlsx", "xls", "csv", "txt", "tsv", "pdf",
-                                    "docx"])
+                                    "docx"], key="raw_uploader")
         if up is not None and st.button("Carregar do arquivo"):
             try:
-                raw, used, dec_used, rows = _imp.import_file(
-                    up.getvalue(), up.name, fmt=fmt_arg, decimal=dec_arg)
-                _apply_raw(raw)
-                st.session_state["_preview_rows"] = rows
-                st.success(f"Arquivo lido: {up.name}. Formato: {used}; decimal: "
-                           f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
-                           f"Grupos: {', '.join(raw.keys())}")
+                bundle = _imp.import_file_multi(up.getvalue(), up.name, kind="raw",
+                                                fmt=fmt_arg, decimal=dec_arg)
+                st.session_state["_experiments"] = bundle
+                st.session_state["_selected_experiment"] = next(
+                    iter(bundle["experiments"]))
+                st.session_state["_preview_rows"] = bundle["rows"]
+                _apply_selected_experiment()
+                nexp = len(bundle["experiments"])
+                st.success(f"Arquivo lido: {up.name}. Decimal: "
+                           f"{'vírgula' if bundle['decimal'] == 'comma' else 'ponto'}"
+                           f". Experimentos encontrados: {nexp}.")
             except _imp.MissingReader as e:
                 st.error(str(e))
             except _imp.UnsupportedFile as e:
@@ -258,6 +310,7 @@ def _section_data():
                 pr = st.session_state["_preview_rows"]
                 st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
                              else pd.DataFrame(pr))
+        _experiment_selector()
 
         st.markdown("---")
         # --- Opção 2: colar dados ---
@@ -272,6 +325,7 @@ def _section_data():
             raw, used, dec_used = _imp.rows_to_raw(rows, fmt_arg, dec_arg)
             _apply_raw(raw)
             st.session_state["_preview_rows"] = None
+            st.session_state["_experiments"] = None
             st.success(f"Formato usado: {used}; decimal: "
                        f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
                        f"Grupos: {', '.join(raw.keys())}")
@@ -281,27 +335,73 @@ def _section_data():
             _preview_raw(st.session_state["raw"])
     else:
         st.session_state["data_kind"] = "SUMMARY"
-        st.markdown("Uma linha por grupo: `Grupo, Média, DP, n`. **Sem o n, ANOVA/"
-                    "Tukey não podem ser realizados.** Diagnósticos que exigem dados "
-                    "brutos (resíduos, Q-Q, Shapiro, outliers) não são possíveis.")
-        text = st.text_area("Colar estatísticas resumidas", height=160,
+        st.markdown("Dados já tratados: uma linha por grupo com **Média, DP e n**. "
+                    "**Sem o n, ANOVA/Tukey não podem ser realizados.** Diagnósticos "
+                    "que exigem dados brutos (resíduos, Q-Q, Shapiro, outliers) não "
+                    "são possíveis a partir de estatísticas resumidas.")
+        decs = st.selectbox("Separador decimal",
+                            ["auto-detectar", "vírgula (,)", "ponto (.)"],
+                            key="sum_dec")
+        decs_arg = {"auto-detectar": "auto", "vírgula (,)": "comma",
+                    "ponto (.)": "dot"}[decs]
+
+        # --- Opção 1: enviar arquivo com estatísticas resumidas ---
+        st.markdown("**Opção 1 — Enviar um arquivo** (Excel, CSV, PDF ou Word) com "
+                    "colunas como `Grupo | Média | DP | n`. Se houver uma coluna de "
+                    "**Experimento/Ensaio**, os experimentos são separados.")
+        ups = st.file_uploader("Arquivo de estatísticas resumidas",
+                               type=["xlsx", "xls", "csv", "txt", "tsv", "pdf",
+                                     "docx"], key="sum_uploader")
+        if ups is not None and st.button("Carregar resumidos do arquivo"):
+            try:
+                bundle = _imp.import_file_multi(ups.getvalue(), ups.name,
+                                                kind="summary", decimal=decs_arg)
+                st.session_state["_experiments"] = bundle
+                st.session_state["_selected_experiment"] = next(
+                    iter(bundle["experiments"]))
+                st.session_state["_preview_rows"] = bundle["rows"]
+                _apply_selected_experiment()
+                st.success(f"Arquivo lido: {ups.name}. Experimentos encontrados: "
+                           f"{len(bundle['experiments'])}.")
+            except _imp.MissingReader as e:
+                st.error(str(e))
+            except _imp.UnsupportedFile as e:
+                st.error(str(e))
+            except Exception as e:
+                st.error(f"Não foi possível ler o arquivo: {e}")
+        if st.session_state.get("_preview_rows"):
+            with st.expander("Ver tabela lida do arquivo (linhas cruas)"):
+                import pandas as pd
+                pr = st.session_state["_preview_rows"]
+                st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
+                             else pd.DataFrame(pr))
+        _experiment_selector()
+
+        st.markdown("---")
+        # --- Opção 2: colar as estatísticas resumidas ---
+        st.markdown("**Opção 2 — Colar** — uma linha por grupo: "
+                    "`Grupo, Média, DP, n`.")
+        text = st.text_area("Colar estatísticas resumidas", height=140,
                             placeholder="A, 10.54, 1.21, 5\nB, 13.72, 0.84, 5\n"
                                         "C, 15.19, 1.03, 6")
-        if st.button("Carregar dados resumidos") and text.strip():
+        if st.button("Carregar dados colados", key="sum_paste") and text.strip():
             summ = _parse_summary(text)
-            st.session_state["summary"] = summ
-            st.session_state["raw"] = None
-            st.session_state["result"] = None
-            missing_n = [l for l, s in summ.items() if "n" not in s]
+            _apply_summary(summ)
+            st.session_state["_experiments"] = None
+            st.session_state["_preview_rows"] = None
+
+        summ_now = st.session_state.get("summary")
+        if summ_now:
+            missing_n = [l for l, s in summ_now.items() if "n" not in s]
             if missing_n:
                 st.error("Os dados disponíveis são insuficientes para realizar "
                          "ANOVA/Tukey. Informe o tamanho amostral (n) de cada "
                          f"grupo. Faltando n em: {', '.join(missing_n)}.")
-            else:
-                st.success(f"Grupos: {', '.join(summ.keys())}")
-        if st.session_state.get("summary"):
             st.subheader("Prévia")
-            st.write(st.session_state["summary"])
+            import pandas as pd
+            rows_prev = [{"Grupo": k, "Média": s.get("mean"), "DP": s.get("sd"),
+                          "n": s.get("n")} for k, s in summ_now.items()]
+            st.dataframe(pd.DataFrame(rows_prev))
 
 
 def _section_design(mode):

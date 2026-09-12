@@ -238,6 +238,17 @@ the optional library is absent. The ``import_file`` dispatcher returns
 (raw, format, decimal, rows) for the UI preview. Missing cells stay missing (never
 zero-filled). 15 tests; existing text-import tests unchanged.
 
+## 17j. Summary tables & multi-experiment files (`tests/test_importer_summary_experiments.py`)
+
+Summary tables parse from files by column name (Grupo/Média/DP/n, tolerant to
+variations like Tratamento/Mean/Desvio/Tamanho) or by position; comma decimal
+honored; missing ``n`` leaves the key absent (so the engine can refuse). An
+``Experimento``/``Ensaio``/… column with more than one distinct value is detected
+and the file is split into independent datasets (the experiment column is removed
+from each). ``import_file_multi(kind="raw"|"summary")`` returns one dataset per
+experiment (keyed "(único)" when there is a single one). End-to-end: each split
+summary experiment is analysed independently (ANOVA). 13 tests.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -251,7 +262,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 247 (243 run + 4 oracle tests skipped when the
+- **Total automated tests:** 260 (256 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

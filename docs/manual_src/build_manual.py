@@ -116,10 +116,19 @@ small("Dica importante: se o seu decimal for VÍRGULA (ex.: 61,4), separe as col
       "separador decimal com o separador de colunas. O programa também sabe extrair "
       "a média de células no formato 'média ± DP' e ignora letras de agrupamento "
       "coladas junto ao número (ex.: 61,4b).")
-h2("Dados resumidos")
+h2("Dados resumidos (já tratados)")
 p("Se você só tem média, desvio padrão e n por grupo, escolha 'Estatísticas "
-  "resumidas' e informe uma linha por grupo: Grupo, Média, DP, n. Atenção: sem o n, "
-  "a ANOVA e o Tukey não podem ser calculados.")
+  "resumidas'. Há duas formas: (1) ENVIAR UM ARQUIVO com colunas como "
+  "'Grupo | Média | DP | n' (Excel, CSV, PDF ou Word), ou (2) COLAR uma linha por "
+  "grupo: Grupo, Média, DP, n. Atenção: sem o n, a ANOVA e o Tukey não podem ser "
+  "calculados. O programa reconhece os nomes das colunas (Grupo, Média/Mean, "
+  "DP/Desvio/SD, n) automaticamente.")
+h2("Vários experimentos num mesmo arquivo")
+p("Se o arquivo (bruto ou resumido) tiver uma coluna de EXPERIMENTO (ou Ensaio, "
+  "Estudo, Medida...) com valores diferentes, o programa separa os experimentos "
+  "automaticamente. Um seletor aparece para você escolher qual experimento analisar; "
+  "cada um é tratado como um conjunto independente, com seus próprios grupos e sua "
+  "própria análise (ANOVA/Tukey etc.).")
 sp()
 small("Células vazias nunca são convertidas em zero; valores ausentes são contados "
       "e descartados de forma explícita.")

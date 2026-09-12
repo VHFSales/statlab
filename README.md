@@ -82,7 +82,7 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-247 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+260 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
 the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
 job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
 numerical foundation is validated against closed-form identities and published
@@ -111,9 +111,11 @@ Spearman with Fisher-z CIs); **linear regression** (OLS, simple & multiple);
 batch analysis; opt-in multiplicity corrections (Bonferroni, Holm, Holm–Šidák,
 Šidák, Hochberg, Benjamini–Hochberg); a registered outlier-exclusion flow with
 original-vs-after comparison; Q–Q and residuals-vs-fitted plots; **data import from
-uploaded files** (Excel, CSV, PDF and Word), with automatic comma/dot decimal
-detection; and full persistence with deterministic reproduction configs, project
-save/reopen, and snapshots.
+uploaded files** (Excel, CSV, PDF and Word) for both raw and summary (mean/SD/n)
+data, with automatic comma/dot decimal detection and **automatic splitting of files
+that contain several experiments** (one analysis per experiment); and full
+persistence with deterministic reproduction configs, project save/reopen, and
+snapshots.
 
 ## Documentation
 
