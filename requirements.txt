@@ -11,6 +11,8 @@
 # --- Data import / wrangling (data/importer.py) ---
 pandas>=1.3
 openpyxl>=3.0        # .xlsx read/write (Excel export)
+pdfplumber>=0.10     # read tables from uploaded PDF files
+python-docx>=0.8     # read tables from uploaded Word (.docx) files
 
 # --- Plotting (plots/scientific_plots.py) ---
 matplotlib>=3.4      # scientific plots + PDF via PdfPages

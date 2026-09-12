@@ -225,6 +225,19 @@ Type III contrasts are orthogonal. Guards: invalid type, empty cell, and
 insufficient error df refused. Orchestration (`analyze_two_way_typed`) warns that SS
 depends on the chosen type when the design is unbalanced.
 
+## 17i. File import & decimal detection (`tests/test_importer_files.py`)
+
+Comma-decimal tables (Brazilian/European) parse correctly in wide and long formats
+when columns are separated by ``;`` or Tab (60,1 -> 60.1); dot-decimal with comma
+separators is unchanged; double-space paste (from PDF/tables) is split correctly.
+``parse_number`` extracts the mean from ``média ± DP`` cells and strips trailing CLD
+letters (61,4b -> 61.4); thousands+decimal combinations resolve by the rightmost
+separator. File readers: CSV bytes parse (with ``;``/comma-decimal); an unsupported
+extension raises ``UnsupportedFile``; PDF/Excel raise a clear ``MissingReader`` when
+the optional library is absent. The ``import_file`` dispatcher returns
+(raw, format, decimal, rows) for the UI preview. Missing cells stay missing (never
+zero-filled). 15 tests; existing text-import tests unchanged.
+
 ## 18. Oracle cross-validation (`tests/test_oracle.py`) — lab environment
 
 When SciPy/statsmodels are installed, the core is cross-checked:
@@ -238,7 +251,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 232 (228 run + 4 oracle tests skipped when the
+- **Total automated tests:** 247 (243 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

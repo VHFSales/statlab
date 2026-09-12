@@ -94,17 +94,28 @@ bullet("EXPORTAR: baixa o Resumo (CSV), o Excel, o resultado e a configuração 
 
 # ---------------------------------------------------------------- 4. Entrada
 h1("4. Como inserir os dados")
-h2("Dados brutos (recomendado)")
-p("Na seção DADOS, deixe 'Dados brutos'. Cole no formato LARGO (uma coluna por "
-  "grupo). As colunas podem ser separadas por TAB (ao copiar do Excel) ou por "
-  "vírgula. Exemplo:")
+p("Na seção DADOS há duas maneiras de fornecer os dados brutos: enviar um arquivo "
+  "ou colar. Também há um seletor de separador decimal (auto, vírgula ou ponto).")
+h2("Opção 1 — Enviar um arquivo (mais fácil)")
+p("Clique em 'Arquivo de dados' e selecione um Excel (.xlsx/.xls), CSV, PDF ou "
+  "Word (.docx). O programa lê a tabela automaticamente, detecta o separador "
+  "decimal e mostra a tabela lida e uma prévia dos valores. Para PDF/Word, o "
+  "programa procura a primeira tabela do documento.")
+h2("Opção 2 — Colar os dados")
+p("Cole no formato LARGO (uma coluna por grupo). As colunas podem ser separadas "
+  "por TAB (ao copiar do Excel), por ponto e vírgula, ou por vírgula. Exemplo:")
 code("Controle   Trat_A   Trat_B")
 code("10.2       13.5     12.1")
 code("10.8       14.0     11.8")
 code("11.1       13.8     12.5")
 code("10.6       14.2     12.0")
 p("Também aceita o formato LONGO (duas colunas: Grupo e Valor). Deixe o Formato em "
-  "'auto-detectar' e clique em 'Carregar dados brutos'. Uma prévia aparece abaixo.")
+  "'auto-detectar' e clique em 'Carregar'. Uma prévia aparece abaixo.")
+small("Dica importante: se o seu decimal for VÍRGULA (ex.: 61,4), separe as colunas "
+      "por ponto e vírgula (;) ou por Tab — nunca por vírgula, para não confundir o "
+      "separador decimal com o separador de colunas. O programa também sabe extrair "
+      "a média de células no formato 'média ± DP' e ignora letras de agrupamento "
+      "coladas junto ao número (ex.: 61,4b).")
 h2("Dados resumidos")
 p("Se você só tem média, desvio padrão e n por grupo, escolha 'Estatísticas "
   "resumidas' e informe uma linha por grupo: Grupo, Média, DP, n. Atenção: sem o n, "
@@ -198,8 +209,14 @@ bullet("O Tukey não apareceu: no Modo Rápido, ele só roda se a ANOVA for "
 bullet("O programa recusou a análise: leia a mensagem. Ele recusa quando o "
        "delineamento não corresponde ao método (ex.: 2 fatores tratados como uma "
        "via, dados resumidos sem n, células vazias no fatorial).")
-bullet("Dados não carregaram: confira o separador (TAB ou vírgula) e se cada grupo "
-       "tem o cabeçalho. Use a prévia para conferir.")
+bullet("A prévia mostrou tudo vazio (NULL): o separador decimal ou de colunas foi "
+       "interpretado errado. Ajuste o 'Separador decimal' para vírgula; se as "
+       "colunas estiverem separadas por vírgula E o decimal também for vírgula, "
+       "troque o separador de colunas para ponto e vírgula (;) ou Tab. Se você "
+       "colou uma tabela de 'média ± DP', use o modo 'Estatísticas resumidas'.")
+bullet("Enviei um PDF/Word e deu erro de leitor: instale os pacotes de leitura "
+       "(pdfplumber para PDF, python-docx para Word) ou exporte a tabela como "
+       "Excel/CSV. A mensagem na tela indica o que instalar.")
 bullet("O app demorou a abrir: o Streamlit Cloud 'adormece' apps sem uso; a "
        "primeira abertura pode levar alguns segundos.")
 
