@@ -300,7 +300,7 @@ present so the oracle tests execute; record any deviations here.
 
 ## 19. Current status
 
-- **Total automated tests:** 308 (304 run + 4 oracle tests skipped when the
+- **Total automated tests:** 311 (307 run + 4 oracle tests skipped when the
   scientific stack is absent locally).
 - **All offline tests pass** on Python 3.9–3.13 (CI matrix).
 - **Oracle cross-validation now runs in CI** (`.github/workflows/ci.yml`,

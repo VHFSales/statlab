@@ -225,6 +225,30 @@ def _apply_raw(raw):
     st.session_state["result"] = None
 
 
+def _warn_if_looks_summary(rows, raw):
+    """If a table loaded as RAW actually looks like a summary/mean±sd table
+    (sample × condition), tell the user to use the Documento mode instead of
+    silently failing with an empty-group error. Returns True if a warning shown."""
+    from data import table_layout as tl
+    # (a) any cell with an explicit ± / (sd) marker -> it's a summary table
+    has_meansd = any(tl.cell_looks_mean_sd(str(c)) for r in (rows or []) for c in r)
+    # (b) a loaded group that is entirely missing (a text label column read as data)
+    empty_groups = [k for k, v in (raw or {}).items()
+                    if v and all(x is None for x in v)]
+    if has_meansd or empty_groups:
+        msg = ("Esta tabela parece ser uma tabela **resumida** (média ± DP) no "
+               "formato amostra × condição, não dados brutos. ")
+        if empty_groups:
+            msg += (f"A coluna '{empty_groups[0]}' não tem números (parece ser a "
+                    "coluna de rótulos das amostras) e viraria um grupo vazio. ")
+        msg += ("Use o modo **'Documento (tese/dissertação: detectar tabelas)'** — "
+                "ele separa média, desvio e as letras de agrupamento e monta os "
+                "grupos corretamente. Selecione o tipo de dados no topo desta seção.")
+        st.warning(msg)
+        return True
+    return False
+
+
 def _preview_raw(raw):
     """Show a friendly preview and warn if parsing produced only missing values."""
     import pandas as pd
@@ -461,6 +485,8 @@ def _section_data():
                 st.success(f"Arquivo lido: {up.name}. Decimal: "
                            f"{'vírgula' if bundle['decimal'] == 'comma' else 'ponto'}"
                            f". Experimentos encontrados: {nexp}.")
+                _warn_if_looks_summary(bundle.get("rows"),
+                                       st.session_state.get("raw"))
             except _imp.MissingReader as e:
                 st.error(str(e))
             except _imp.UnsupportedFile as e:
@@ -489,6 +515,7 @@ def _section_data():
             st.success(f"Formato usado: {used}; decimal: "
                        f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
                        f"Grupos: {', '.join(raw.keys())}")
+            _warn_if_looks_summary(rows, raw)
 
         if st.session_state.get("raw"):
             st.subheader("Prévia (valores interpretados por grupo)")
@@ -702,10 +729,38 @@ def _section_analysis(mode):
             _show_result_summary(res)
 
 
+def _show_issues(res):
+    """Show the data-validation issues (errors/warnings/info) behind a result, so
+    the user knows exactly what to fix — especially when the analysis was refused."""
+    issues = getattr(res, "issues", None) or []
+    if not issues:
+        return
+    errors = [i for i in issues if i.get("severity") == "ERROR"]
+    warnings = [i for i in issues if i.get("severity") == "WARNING"]
+    infos = [i for i in issues if i.get("severity") == "INFO"]
+    if errors:
+        st.markdown("**Erros que impediram o cálculo:**")
+        for i in errors:
+            st.markdown(f"- ❌ {i.get('message', '')}")
+    if warnings:
+        st.markdown("**Avisos:**")
+        for i in warnings:
+            st.markdown(f"- ⚠️ {i.get('message', '')}")
+    if infos:
+        with st.expander("Detalhes (informativo)"):
+            for i in infos:
+                st.markdown(f"- ℹ️ {i.get('message', '')}")
+
+
 def _show_result_summary(res):
     if res.refusals:
         for r in res.refusals:
             st.error(r)
+        _show_issues(res)
+        st.info("Dica: os dados brutos precisam de pelo menos 2 grupos, cada um com "
+                "valores numéricos válidos. Se você carregou de um PDF/tabela, "
+                "confira se não entrou texto (cabeçalho, '±', '%', letras) nas "
+                "colunas de valores, e se cada grupo tem observações.")
         return
     st.subheader("RESULTADO")
     if res.omnibus_kind == "anova":
