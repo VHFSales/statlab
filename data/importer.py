@@ -402,6 +402,181 @@ def import_file(data: bytes, filename: str, fmt: Optional[str] = None,
 
 
 # --------------------------------------------------------------------------- #
+# Column-name recognition (for summary tables and experiment splitting)
+# --------------------------------------------------------------------------- #
+def _norm(s: str) -> str:
+    """Normalize a header for matching: lowercase, no accents, alnum only."""
+    s = str(s).strip().lower()
+    for a, b in (("á", "a"), ("â", "a"), ("ã", "a"), ("à", "a"),
+                 ("é", "e"), ("ê", "e"), ("í", "i"), ("ó", "o"), ("ô", "o"),
+                 ("õ", "o"), ("ú", "u"), ("ç", "c")):
+        s = s.replace(a, b)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+# candidate header names (normalized) for each summary role
+_GROUP_NAMES = {"grupo", "group", "tratamento", "treatment", "amostra", "sample",
+                "condicao", "condition", "nivel", "level", "categoria"}
+_MEAN_NAMES = {"media", "mean", "medias", "means", "average", "avg", "m"}
+_SD_NAMES = {"dp", "desviopadrao", "sd", "stddev", "std", "desvio", "s",
+             "desviopadraoamostral", "stdev"}
+_N_NAMES = {"n", "tamanho", "size", "amostragem", "nobs", "count", "repeticoes",
+            "reps", "replicatas"}
+_EXPERIMENT_NAMES = {"experimento", "experiment", "exp", "ensaio", "estudo",
+                     "study", "batch", "lote", "corrida", "run", "variavel",
+                     "variable", "medida", "medicao", "condicao"}
+
+
+def _find_col(header: List[str], names: set) -> Optional[int]:
+    for i, h in enumerate(header):
+        if _norm(h) in names:
+            return i
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# Summary tables from files: group | mean | sd | n  (per experiment optional)
+# --------------------------------------------------------------------------- #
+def rows_to_summary(rows: List[List[str]], decimal: str = "auto"
+                    ) -> Tuple[Dict[str, Dict[str, float]], str]:
+    """Convert a table of strings into a summary dict {group: {mean, sd, n}}.
+
+    Recognizes columns by name (Grupo/Média/DP/n, tolerant to variations). If the
+    named columns are not found, falls back to positional order:
+    col0=group, col1=mean, col2=sd, col3=n. Returns (summary, decimal).
+    """
+    if not rows:
+        return {}, decimal
+    if decimal == "auto":
+        decimal = detect_decimal(rows)
+    header = rows[0]
+    gi = _find_col(header, _GROUP_NAMES)
+    mi = _find_col(header, _MEAN_NAMES)
+    si = _find_col(header, _SD_NAMES)
+    ni = _find_col(header, _N_NAMES)
+
+    named = gi is not None and mi is not None
+    if named:
+        body = rows[1:]
+    else:
+        # positional: group, mean, sd, n  (treat first row as data if it is numeric)
+        gi, mi, si, ni = 0, 1, 2, 3
+        first_is_header = any(parse_number(c, decimal) is None
+                              for c in header[1:2]) if len(header) > 1 else True
+        body = rows[1:] if first_is_header else rows
+
+    summary: Dict[str, Dict[str, float]] = {}
+    for r in body:
+        if gi >= len(r):
+            continue
+        label = str(r[gi]).strip()
+        if label == "":
+            continue
+        mean = parse_number(r[mi], decimal) if mi is not None and mi < len(r) else None
+        if mean is None:
+            continue
+        entry: Dict[str, float] = {"mean": mean}
+        sd = parse_number(r[si], decimal) if si is not None and si < len(r) else None
+        if sd is not None:
+            entry["sd"] = sd
+        nval = parse_number(r[ni], decimal) if ni is not None and ni < len(r) else None
+        if nval is not None:
+            entry["n"] = int(round(nval))
+        summary[label] = entry
+    return summary, decimal
+
+
+def import_summary_file(data: bytes, filename: str, decimal: str = "auto"
+                        ) -> Tuple[Dict[str, Dict[str, float]], str, List[List[str]]]:
+    """Read an uploaded file as a SUMMARY table. Returns (summary, decimal, rows)."""
+    rows = read_uploaded_file(data, filename)
+    summary, dec = rows_to_summary(rows, decimal)
+    return summary, dec, rows
+
+
+# --------------------------------------------------------------------------- #
+# Multiple experiments in one file
+# --------------------------------------------------------------------------- #
+def detect_experiment_column(rows: List[List[str]]) -> Optional[int]:
+    """Return the index of an 'experiment' column if the header names one AND it
+    holds more than one distinct value; otherwise None.
+
+    Only used for LONG-shaped tables (group + value, or group + summary columns),
+    where an extra categorical column groups rows into separate experiments.
+    """
+    if not rows or len(rows) < 2:
+        return None
+    header = rows[0]
+    idx = _find_col(header, _EXPERIMENT_NAMES)
+    if idx is None:
+        return None
+    values = {str(r[idx]).strip() for r in rows[1:] if idx < len(r)
+              and str(r[idx]).strip() != ""}
+    return idx if len(values) > 1 else None
+
+
+def split_by_experiment(rows: List[List[str]], exp_col: int
+                        ) -> "Dict[str, List[List[str]]]":
+    """Split a table into {experiment_name: sub-rows(with header)} by exp_col.
+
+    The experiment column is removed from each sub-table so the remaining columns
+    are the normal group/value or group/mean/sd/n layout.
+    """
+    header = rows[0]
+    sub_header = [h for j, h in enumerate(header) if j != exp_col]
+    out: "Dict[str, List[List[str]]]" = {}
+    order: List[str] = []
+    for r in rows[1:]:
+        if exp_col >= len(r):
+            continue
+        exp = str(r[exp_col]).strip()
+        if exp == "":
+            exp = "(sem nome)"
+        if exp not in out:
+            out[exp] = [sub_header]
+            order.append(exp)
+        out[exp].append([c for j, c in enumerate(r) if j != exp_col])
+    # preserve first-seen order
+    return {k: out[k] for k in order}
+
+
+def import_file_multi(data: bytes, filename: str, kind: str = "raw",
+                      fmt: Optional[str] = None, decimal: str = "auto"):
+    """Read a file that MAY contain several experiments.
+
+    ``kind`` = "raw" or "summary". Returns a dict:
+        {
+          "experiments": { name: dataset, ... },   # dataset is raw or summary dict
+          "multi": bool,          # True if more than one experiment was found
+          "kind": kind,
+          "decimal": <used>,
+          "rows": <parsed table>,
+        }
+    When there is a single experiment, ``experiments`` has one entry keyed
+    "(único)".
+    """
+    rows = read_uploaded_file(data, filename)
+    if decimal == "auto":
+        decimal = detect_decimal(rows)
+    exp_col = detect_experiment_column(rows)
+
+    def _one(sub_rows):
+        if kind == "summary":
+            summ, _ = rows_to_summary(sub_rows, decimal)
+            return summ
+        raw, _fmt, _dec = rows_to_raw(sub_rows, fmt, decimal)
+        return raw
+
+    if exp_col is not None:
+        parts = split_by_experiment(rows, exp_col)
+        experiments = {name: _one(sub) for name, sub in parts.items()}
+        return {"experiments": experiments, "multi": True, "kind": kind,
+                "decimal": decimal, "rows": rows}
+    return {"experiments": {"(único)": _one(rows)}, "multi": False, "kind": kind,
+            "decimal": decimal, "rows": rows}
+
+
+# --------------------------------------------------------------------------- #
 # Legacy helpers (kept for compatibility with existing callers/tests)
 # --------------------------------------------------------------------------- #
 def _is_number(s: str) -> bool:
