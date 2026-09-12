@@ -62,6 +62,8 @@ def _init_state():
     st.session_state.setdefault("_experiments", None)      # multi-experiment bundle
     st.session_state.setdefault("_selected_experiment", None)
     st.session_state.setdefault("_preview_rows", None)
+    st.session_state.setdefault("_doc_scan", None)         # document scan result
+    st.session_state.setdefault("_doc_name", None)
     st.session_state.setdefault("project", {"Nome": "", "Pesquisador": "",
                                             "Laboratório": "", "Descrição": ""})
 
@@ -264,10 +266,95 @@ def _experiment_selector():
     return True
 
 
+def _section_data_document():
+    st.markdown("Envie uma **tese, dissertação ou artigo** (PDF ou Word). O programa "
+                "varre o documento inteiro, **detecta as tabelas** e ordena as que "
+                "mais parecem dados estatísticos. Você escolhe qual analisar.")
+    st.caption("Importante: dados que aparecem apenas em GRÁFICOS não são extraídos "
+               "— estimar valores a partir de um gráfico é cientificamente inseguro. "
+               "Use a tabela correspondente aos dados.")
+    from data import document_scan as ds
+
+    up = st.file_uploader("Documento (.pdf ou .docx)", type=["pdf", "docx"],
+                          key="doc_uploader")
+    if up is not None and st.button("Varrer documento"):
+        try:
+            scan = ds.scan_document(up.getvalue(), up.name)
+            st.session_state["_doc_scan"] = scan
+            st.session_state["_doc_name"] = up.name
+        except ds.MissingReader as e:
+            st.error(str(e))
+        except ds.UnsupportedFile as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Não foi possível varrer o documento: {e}")
+
+    scan = st.session_state.get("_doc_scan")
+    if not scan:
+        return
+    import pandas as pd
+    st.success(f"Documento varrido: {st.session_state.get('_doc_name','')}. "
+               f"{len(scan.tables)} tabela(s) detectada(s).")
+    if scan.figure_note:
+        st.warning(scan.figure_note)
+    if not scan.tables:
+        st.info("Nenhuma tabela reconhecível foi encontrada. Se os dados estiverem "
+                "só em gráficos ou em imagem, exporte a tabela como CSV/Excel.")
+        return
+
+    # lista das tabelas com score
+    labels = []
+    for i, t in enumerate(scan.tables):
+        cap = f" — {t.caption}" if t.caption else ""
+        labels.append(f"#{i+1} · {t.location}{cap} · "
+                      f"{t.n_rows}x{t.n_cols} · afinidade {int(t.score*100)}%")
+    choice = st.selectbox("Tabelas detectadas (ordenadas por afinidade com dados)",
+                          list(range(len(scan.tables))),
+                          format_func=lambda i: labels[i])
+    tbl = scan.tables[choice]
+
+    st.markdown("**Prévia da tabela selecionada:**")
+    pr = tbl.rows
+    st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
+                 else pd.DataFrame(pr))
+    st.caption("Motivos da pontuação: " + "; ".join(tbl.reasons))
+
+    tipo = st.radio("Interpretar a tabela como",
+                    ["Detectar automaticamente", "Dados brutos",
+                     "Estatísticas resumidas (Média, DP, n)"], horizontal=True)
+    kind_arg = {"Detectar automaticamente": "auto", "Dados brutos": "raw",
+                "Estatísticas resumidas (Média, DP, n)": "summary"}[tipo]
+    if st.button("Usar esta tabela para análise"):
+        try:
+            used, dataset = ds.table_to_dataset(tbl, kind=kind_arg)
+            if used == "summary":
+                st.session_state["data_kind"] = "SUMMARY"
+                _apply_summary(dataset)
+            else:
+                st.session_state["data_kind"] = "RAW"
+                _apply_raw(dataset)
+            st.session_state["_experiments"] = None
+            st.success(f"Tabela carregada como '{used}'. Grupos: "
+                       f"{', '.join(dataset.keys())}. Vá para DELINEAMENTO e ANÁLISE.")
+            if used == "raw":
+                _preview_raw(dataset)
+            else:
+                st.dataframe(pd.DataFrame(
+                    [{"Grupo": k, "Média": s.get("mean"), "DP": s.get("sd"),
+                      "n": s.get("n")} for k, s in dataset.items()]))
+        except Exception as e:
+            st.error(f"Não foi possível interpretar a tabela: {e}")
+
+
 def _section_data():
     st.header("Dados")
-    kind = st.radio("Tipo de dados", ["Dados brutos (recomendado)",
-                                      "Estatísticas resumidas (Média, DP, n)"])
+    kind = st.radio("Tipo de dados", [
+        "Dados brutos (recomendado)",
+        "Estatísticas resumidas (Média, DP, n)",
+        "Documento (tese/dissertação: detectar tabelas)"])
+    if kind.startswith("Documento"):
+        _section_data_document()
+        return
     if kind.startswith("Dados brutos"):
         st.session_state["data_kind"] = "RAW"
         fmt = st.selectbox("Formato", ["auto-detectar", "largo", "longo"])
