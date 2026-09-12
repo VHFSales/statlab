@@ -27,6 +27,7 @@ except Exception as exc:  # pragma: no cover
 
 from app.core.orchestrator import (AnalysisOptions, analyze_batch, analyze_raw,
                                    analyze_summary)
+from data import importer as _imp
 from data.importer import import_text
 from statistics.decision_engine import DesignSpec
 from statistics.formatting import format_number, format_p
@@ -190,28 +191,94 @@ def _parse_summary(text: str):
     return out
 
 
+def _apply_raw(raw):
+    """Store a freshly loaded raw dataset and reset dependent state."""
+    st.session_state["raw"] = raw
+    st.session_state["summary"] = None
+    st.session_state["result"] = None
+
+
+def _preview_raw(raw):
+    """Show a friendly preview and warn if parsing produced only missing values."""
+    import pandas as pd
+    total = sum(len(v) for v in raw.values())
+    valid = sum(1 for v in raw.values() for x in v if x is not None)
+    # build a display table padded to equal length
+    maxlen = max((len(v) for v in raw.values()), default=0)
+    table = {k: list(v) + [None] * (maxlen - len(v)) for k, v in raw.items()}
+    st.dataframe(pd.DataFrame(table))
+    if total > 0 and valid == 0:
+        st.error("Todos os valores ficaram vazios (NULL). Provavelmente o separador "
+                 "decimal ou o separador de colunas foi interpretado errado. "
+                 "Ajuste 'Separador decimal' acima, ou, se o decimal for vírgula, "
+                 "use ponto e vírgula (;) / Tab entre as colunas. Se colou uma "
+                 "tabela de 'média ± DP', use o modo 'Estatísticas resumidas'.")
+    elif valid < total:
+        st.info(f"{total - valid} célula(s) sem valor numérico foram tratadas como "
+                "ausentes (não viram zero).")
+
+
 def _section_data():
     st.header("Dados")
     kind = st.radio("Tipo de dados", ["Dados brutos (recomendado)",
                                       "Estatísticas resumidas (Média, DP, n)"])
     if kind.startswith("Dados brutos"):
         st.session_state["data_kind"] = "RAW"
-        st.markdown("Cole os dados do Excel — formato **largo** (uma coluna por "
-                    "grupo) ou **longo** (`Grupo | Valor`). Células vazias nunca "
-                    "viram zero.")
-        text = st.text_area("Colar dados", height=200,
-                            placeholder="A\tB\tC\n10.2\t13.5\t14.9\n...")
         fmt = st.selectbox("Formato", ["auto-detectar", "largo", "longo"])
-        if st.button("Carregar dados brutos") and text.strip():
-            fmt_arg = {"auto-detectar": None, "largo": "wide", "longo": "long"}[fmt]
-            raw, used = import_text(text, fmt_arg)
-            st.session_state["raw"] = raw
-            st.session_state["summary"] = None
-            st.session_state["result"] = None
-            st.success(f"Formato usado: {used}. Grupos: {', '.join(raw.keys())}")
+        fmt_arg = {"auto-detectar": None, "largo": "wide", "longo": "long"}[fmt]
+        dec = st.selectbox("Separador decimal",
+                           ["auto-detectar", "vírgula (,)", "ponto (.)"])
+        dec_arg = {"auto-detectar": "auto", "vírgula (,)": "comma",
+                   "ponto (.)": "dot"}[dec]
+
+        # --- Opção 1: enviar arquivo ---
+        st.markdown("**Opção 1 — Enviar um arquivo** (Excel, CSV, PDF ou Word). "
+                    "O programa lê a tabela automaticamente.")
+        up = st.file_uploader("Arquivo de dados",
+                              type=["xlsx", "xls", "csv", "txt", "tsv", "pdf",
+                                    "docx"])
+        if up is not None and st.button("Carregar do arquivo"):
+            try:
+                raw, used, dec_used, rows = _imp.import_file(
+                    up.getvalue(), up.name, fmt=fmt_arg, decimal=dec_arg)
+                _apply_raw(raw)
+                st.session_state["_preview_rows"] = rows
+                st.success(f"Arquivo lido: {up.name}. Formato: {used}; decimal: "
+                           f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
+                           f"Grupos: {', '.join(raw.keys())}")
+            except _imp.MissingReader as e:
+                st.error(str(e))
+            except _imp.UnsupportedFile as e:
+                st.error(str(e))
+            except Exception as e:
+                st.error(f"Não foi possível ler o arquivo: {e}")
+        if st.session_state.get("_preview_rows"):
+            with st.expander("Ver tabela lida do arquivo (linhas cruas)"):
+                import pandas as pd
+                pr = st.session_state["_preview_rows"]
+                st.dataframe(pd.DataFrame(pr[1:], columns=pr[0]) if len(pr) > 1
+                             else pd.DataFrame(pr))
+
+        st.markdown("---")
+        # --- Opção 2: colar dados ---
+        st.markdown("**Opção 2 — Colar os dados** — formato **largo** (uma coluna "
+                    "por grupo) ou **longo** (`Grupo | Valor`). Dica: se o decimal "
+                    "for vírgula, separe as colunas por **ponto e vírgula (;)** ou "
+                    "**Tab**. Células vazias nunca viram zero.")
+        text = st.text_area("Colar dados", height=180,
+                            placeholder="A\tB\tC\n10,2\t13,5\t14,9\n...")
+        if st.button("Carregar dados colados") and text.strip():
+            rows = _imp.parse_delimited_text(text)
+            raw, used, dec_used = _imp.rows_to_raw(rows, fmt_arg, dec_arg)
+            _apply_raw(raw)
+            st.session_state["_preview_rows"] = None
+            st.success(f"Formato usado: {used}; decimal: "
+                       f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
+                       f"Grupos: {', '.join(raw.keys())}")
+
         if st.session_state.get("raw"):
-            st.subheader("Prévia")
-            st.write({k: v for k, v in st.session_state["raw"].items()})
+            st.subheader("Prévia (valores interpretados por grupo)")
+            _preview_raw(st.session_state["raw"])
     else:
         st.session_state["data_kind"] = "SUMMARY"
         st.markdown("Uma linha por grupo: `Grupo, Média, DP, n`. **Sem o n, ANOVA/"
