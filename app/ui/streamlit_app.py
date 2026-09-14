@@ -255,6 +255,42 @@ def _warn_if_looks_summary(rows, raw):
     return False
 
 
+def _warn_if_misread_wide(rows):
+    """Detect a tidy/long sheet that was fed as 'one column per group' (e.g. columns
+    like Potência, Velocidade, Med1..Med5, Média, DP). In that case each column is
+    NOT an experimental group, so an ANOVA over them is meaningless. Warn loudly
+    with concrete guidance. Returns True if a warning was shown."""
+    if not rows:
+        return False
+    problem = _imp.detect_misread_wide(rows[0])
+    if not problem:
+        return False
+    fatores = ", ".join(problem["factors"]) or "—"
+    medidas = ", ".join(problem["measures"])
+    derivadas = ", ".join(problem["derived"])
+    st.error(
+        "⚠️ **Atenção: esta planilha provavelmente foi interpretada de forma "
+        "errada.** O programa tratou **cada coluna como um grupo**, mas as suas "
+        "colunas têm papéis diferentes:\n\n"
+        f"- **Fatores** (não são grupos): {fatores}\n"
+        + (f"- **Medições repetidas** (são as observações, não grupos): {medidas}\n"
+           if medidas else "")
+        + (f"- **Valores derivados** (não são dados): {derivadas}\n"
+           if derivadas else "")
+        + "\nComparar essas colunas entre si mistura variáveis com significados e "
+        "unidades diferentes — o F e as letras resultantes **não têm sentido "
+        "experimental**.")
+    st.info(
+        "**Como corrigir:** cada combinação dos seus fatores (ex.: Potência × "
+        "Velocidade) deve ser **um grupo**, com as réplicas como observações. "
+        "Reorganize a planilha para ter **uma coluna por combinação** (ex.: "
+        "`0W_10`, `0W_13`, ... `1000W_30`) e **uma linha por réplica**. "
+        "Alternativamente, use o formato **longo**: duas colunas, `Grupo | Valor`, "
+        "onde `Grupo` já combina os fatores (ex.: `0W_10`) — e escolha 'longo' no "
+        "seletor de formato.")
+    return True
+
+
 def _preview_raw(raw):
     """Show a friendly preview and warn if parsing produced only missing values."""
     import pandas as pd
@@ -523,8 +559,9 @@ def _section_data():
                 st.success(f"Arquivo lido: {up.name}. Decimal: "
                            f"{'vírgula' if bundle['decimal'] == 'comma' else 'ponto'}"
                            f". Experimentos encontrados: {nexp}.")
-                _warn_if_looks_summary(bundle.get("rows"),
-                                       st.session_state.get("raw"))
+                if not _warn_if_misread_wide(bundle.get("rows")):
+                    _warn_if_looks_summary(bundle.get("rows"),
+                                           st.session_state.get("raw"))
             except _imp.MissingReader as e:
                 st.error(str(e))
             except _imp.UnsupportedFile as e:
@@ -553,7 +590,8 @@ def _section_data():
             st.success(f"Formato usado: {used}; decimal: "
                        f"{'vírgula' if dec_used == 'comma' else 'ponto'}. "
                        f"Grupos: {', '.join(raw.keys())}")
-            _warn_if_looks_summary(rows, raw)
+            if not _warn_if_misread_wide(rows):
+                _warn_if_looks_summary(rows, raw)
 
         if st.session_state.get("raw"):
             st.subheader("Prévia (valores interpretados por grupo)")

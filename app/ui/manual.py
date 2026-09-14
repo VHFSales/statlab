@@ -506,6 +506,17 @@ FAQ: List[Dict[str, str]] = [
           "análise não foi concluída. Para forçar as letras mesmo sem significância, "
           "use o modo Avançado e marque 'Executar pós-teste mesmo se o teste global "
           "não for significativo'."},
+    {"p": "Minha planilha tem colunas como Potência, Velocidade, Med1..Med5, "
+          "Média, DP. O resultado deu estranho. Por quê?",
+     "r": "Esse formato (uma linha por condição, com fatores e medições em "
+          "colunas) NÃO é 'uma coluna por grupo'. Se enviado como dados brutos "
+          "largos, o programa compararia colunas de significados diferentes "
+          "(potência vs. ângulo vs. DP), o que não tem sentido. O StatLab agora "
+          "DETECTA isso e avisa. Corrija assim: cada combinação dos fatores (ex.: "
+          "Potência × Velocidade) é um GRUPO; reorganize para uma coluna por "
+          "combinação (0W_10, 0W_13, ... 1000W_30) com uma linha por réplica, OU "
+          "use o formato longo (Grupo | Valor), com o Grupo já combinando os "
+          "fatores."},
     {"p": "Tenho os dados já tratados (Média, DP e n). Onde coloco?",
      "r": "Na seção DADOS, escolha 'Estatísticas resumidas (Média, DP, n)'. Você "
           "pode colar uma linha por grupo no formato 'Grupo, Média, DP, n' ou enviar "
