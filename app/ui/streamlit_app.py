@@ -454,6 +454,9 @@ def _section_data_document():
 
 def _section_data():
     st.header("Dados")
+    st.caption("Já tem os dados tratados (Média, Desvio padrão e n de cada grupo)? "
+               "Escolha **'Estatísticas resumidas (Média, DP, n)'** abaixo — não "
+               "precisa dos valores individuais.")
     kind = st.radio("Tipo de dados", [
         "Dados brutos (recomendado)",
         "Estatísticas resumidas (Média, DP, n)",
@@ -837,6 +840,25 @@ def _show_descriptive_with_letters(res):
     if letters:
         st.caption("Letras são símbolos de agrupamento (não um ranking). Grupos que "
                    "compartilham uma letra não diferem significativamente.")
+    else:
+        # No letters were produced — explain WHY, so the user isn't left guessing.
+        if res.ttest:
+            st.info("**Sem letras de agrupamento porque há apenas 2 grupos.** Com "
+                    "dois grupos a comparação é o próprio teste t (acima); letras "
+                    "(a, b, c...) só fazem sentido a partir de 3 grupos. Veja o "
+                    "resultado da comparação na seção PÓS-TESTES.")
+        elif res.omnibus and res.omnibus.get("p", 1.0) is not None and \
+                (res.omnibus.get("p", 1.0) >= res.alpha):
+            st.info("**Sem letras de agrupamento porque o teste global NÃO foi "
+                    "significativo** (p ≥ α): não há evidência de diferença entre os "
+                    "grupos, então todos receberiam a mesma letra. No modo "
+                    "**Avançado** você pode marcar *'Executar pós-teste mesmo se o "
+                    "teste global não for significativo'* para forçar as letras "
+                    "(todos ficarão com 'a').")
+        else:
+            st.info("**Sem letras de agrupamento.** Elas são geradas quando há 3+ "
+                    "grupos e o teste global é significativo. Verifique se a análise "
+                    "foi concluída e se há pelo menos 3 grupos.")
 
 
 def _section_posthoc():

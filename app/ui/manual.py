@@ -495,6 +495,18 @@ GLOSSARIO: Dict[str, str] = {
 # Perguntas frequentes
 # --------------------------------------------------------------------------- #
 FAQ: List[Dict[str, str]] = [
+    {"p": "Rodei a análise mas NÃO apareceram as letras (a, b, c). Por quê?",
+     "r": "Há três motivos possíveis: (1) o teste global NÃO foi significativo "
+          "(p ≥ 0,05) — como não há diferença entre os grupos, todos teriam a mesma "
+          "letra, então no modo Rápido o pós-teste nem roda; (2) você tem apenas "
+          "2 grupos — aí a comparação é o teste t e não há letras par a par; (3) a "
+          "análise não foi concluída. Para forçar as letras mesmo sem significância, "
+          "use o modo Avançado e marque 'Executar pós-teste mesmo se o teste global "
+          "não for significativo'."},
+    {"p": "Tenho os dados já tratados (Média, DP e n). Onde coloco?",
+     "r": "Na seção DADOS, escolha 'Estatísticas resumidas (Média, DP, n)'. Você "
+          "pode colar uma linha por grupo no formato 'Grupo, Média, DP, n' ou enviar "
+          "um arquivo com essas colunas. Não precisa dos valores individuais."},
     {"p": "O que significa \"não significativo\"?",
      "r": "Que os dados não deram evidência suficiente de diferença. NÃO prova que "
           "os grupos são iguais — pode faltar dados (n pequeno)."},
