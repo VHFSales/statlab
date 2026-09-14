@@ -452,8 +452,37 @@ def _section_data_document():
                    "Vá para DELINEAMENTO e ANÁLISE.")
 
 
+# Demo dataset used by the "load example" button. Chosen to give a clean
+# classical ANOVA + Tukey HSD with didactic letters (Controle=c, 600 W=b,
+# 750 W and 900 W share 'a' -> they don't differ from each other).
+_EXEMPLO_BRUTO = {
+    "Controle": [48.2, 49.1, 47.8, 48.6, 49.3, 48.0],
+    "600 W":    [55.4, 56.1, 54.8, 55.9, 55.2, 56.3],
+    "750 W":    [62.7, 63.2, 61.9, 62.4, 63.5, 62.1],
+    "900 W":    [61.8, 62.5, 62.0, 61.5, 62.8, 62.2],
+}
+
+
 def _section_data():
     st.header("Dados")
+
+    # --- Atalho: carregar um exemplo com 1 clique (para ver as letras do Tukey) ---
+    with st.expander("🧪 Testar com dados de exemplo (ver as letras do Tukey)",
+                     expanded=False):
+        st.markdown("Não tem dados à mão? Clique abaixo para **carregar um exemplo "
+                    "pronto** (4 grupos). Depois vá em **ANÁLISE → Analisar** e as "
+                    "**letras (a, b, c)** aparecerão na tabela de resultado.")
+        if st.button("▶️ Carregar exemplo agora"):
+            _apply_raw({k: list(v) for k, v in _EXEMPLO_BRUTO.items()})
+            st.session_state["data_kind"] = "RAW"
+            st.session_state["_experiments"] = None
+            st.session_state["_preview_rows"] = None
+            st.success("Exemplo carregado (Controle, 600 W, 750 W, 900 W). "
+                       "Agora vá em ANÁLISE e clique em Analisar — você verá as "
+                       "letras do Tukey na tabela de resultado.")
+        st.caption("O que deve aparecer: Controle=c, 600 W=b, 750 W e 900 W=a "
+                   "(as duas maiores potências não diferem entre si).")
+
     st.caption("Já tem os dados tratados (Média, Desvio padrão e n de cada grupo)? "
                "Escolha **'Estatísticas resumidas (Média, DP, n)'** abaixo — não "
                "precisa dos valores individuais.")

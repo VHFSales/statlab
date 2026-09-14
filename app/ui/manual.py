@@ -43,6 +43,9 @@ COMO_LER_P = (
 # Guia rápido (o caminho mais comum, do zero ao resultado)
 # --------------------------------------------------------------------------- #
 QUICK_START: List[str] = [
+    "**Só quer ver funcionando?** Na seção DADOS, abra *'🧪 Testar com dados de "
+    "exemplo'* e clique em carregar — depois vá em ANÁLISE → Analisar e veja as "
+    "letras do Tukey aparecerem. (Pule os passos abaixo.)",
     "**Abra a seção DADOS** (menu à esquerda) e informe seus números — você pode "
     "enviar um arquivo (Excel, CSV, PDF ou Word) ou colar a tabela.",
     "**Confira a prévia**: veja se cada grupo (coluna) tem os valores certos e se "
