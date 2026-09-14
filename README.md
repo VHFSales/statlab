@@ -89,7 +89,7 @@ print(result.cld["display"])          # e.g. {'A': 'a', 'B': 'b', 'Controle': 'c
 
 ## Validation status
 
-327 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
+332 automated tests pass on Python 3.9–3.13 (unittest; see `docs/validation.md` for
 the full dossier). CI runs the suite on every push/PR, including an `oracle-tests`
 job that installs SciPy/statsmodels and cross-validates the pure-Python core. The
 numerical foundation is validated against closed-form identities and published

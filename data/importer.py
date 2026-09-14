@@ -259,6 +259,62 @@ def to_raw_wide(rows: List[List[str]], decimal: str = "auto"
     return data
 
 
+# Column-name hints used to detect a MISREAD wide table (a tidy/long sheet fed as
+# "one column per group"). In such sheets, columns are heterogeneous: some are
+# FACTORS (Potência, Velocidade...), some are repeated MEASUREMENTS (Med1, Rep2...),
+# and some are DERIVED summaries (Média, DP...). None of these should become an
+# analysis "group".
+_FACTOR_HINTS = ("potencia", "potência", "power", "velocidade", "speed",
+                 "tratamento", "treatment", "fator", "factor", "grupo", "group",
+                 "condicao", "condição", "nivel", "nível", "dose", "tempo", "time",
+                 "material", "amostra", "sample", "temperatura", "concentracao",
+                 "concentração")
+_MEASURE_SEQ_HINTS = ("med", "medida", "medicao", "medição", "rep", "replica",
+                      "réplica", "replicata", "obs", "measurement", "leitura")
+_DERIVED_HINTS = ("media", "média", "mean", "dp", "desvio", "sd", "std", "ep",
+                  "erro", "se", "variancia", "variância", "var", "cv", "n",
+                  "variacao", "variação", "min", "max", "mediana", "median")
+
+
+def detect_misread_wide(header: List[str]) -> Optional[dict]:
+    """Detect a wide table that was almost certainly MISREAD (a tidy/long sheet
+    treated as one-column-per-group). Returns a dict describing the problem, or
+    None if the wide layout looks fine.
+
+    Heuristic: if the columns mix clearly different roles — factor-like columns
+    (Potência, Velocidade...), a run of repeated-measurement columns (Med1..Med5),
+    and derived-summary columns (Média, DP...) — then each column is NOT a group.
+    """
+    def norm(s: str) -> str:
+        return _norm(str(s))
+
+    factors, measures, derived = [], [], []
+    for h in header:
+        hn = norm(h)
+        if hn == "":
+            continue
+        # a measurement sequence like "med1", "rep2", "replica 3"
+        if any(hn.startswith(_norm(m)) for m in _MEASURE_SEQ_HINTS) and \
+                any(ch.isdigit() for ch in hn):
+            measures.append(h)
+        elif hn in (_norm(d) for d in _DERIVED_HINTS):
+            derived.append(h)
+        elif any(_norm(f) == hn or hn.startswith(_norm(f)) for f in _FACTOR_HINTS):
+            factors.append(h)
+
+    # A misread sheet typically shows: >=1 factor column AND (a run of measurement
+    # columns OR at least one derived column). That combination never occurs in a
+    # legitimate "one column per group" table.
+    suspicious = bool(factors) and (len(measures) >= 2 or bool(derived))
+    if not suspicious:
+        return None
+    return {
+        "factors": factors,
+        "measures": measures,
+        "derived": derived,
+    }
+
+
 def to_raw_long(rows: List[List[str]], decimal: str = "auto"
                 ) -> Dict[str, List[Optional[float]]]:
     data: Dict[str, List[Optional[float]]] = {}
